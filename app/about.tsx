@@ -1,0 +1,140 @@
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ArrowLeft, ChevronRight, FileText, Mail, Shield } from 'react-native-feather';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, radius, spacing, typography } from '../constants/theme';
+
+export default function AboutScreen() {
+  const router = useRouter();
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <ArrowLeft width={24} height={24} stroke={colors.primary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>About</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.brandSection}>
+          <Text style={styles.brandName}>düply</Text>
+          <Text style={styles.version}>Version 1.0.0</Text>
+          <Text style={styles.description}>
+            Find affordable alternatives to your favorite beauty products. Compare
+            formulas, shades, and prices — all in one place.
+          </Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>Legal</Text>
+        <View style={styles.card}>
+          <LinkRow icon={FileText} label="Terms of Service" />
+          <View style={styles.divider} />
+          <LinkRow icon={Shield} label="Privacy Policy" />
+          <View style={styles.divider} />
+          <LinkRow icon={Mail} label="Contact Us" />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function LinkRow({ icon: Icon, label }: { icon: React.FC<any>; label: string }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}>
+      <View style={styles.linkLeft}>
+        <Icon width={20} height={20} stroke={colors.textMuted} />
+        <Text style={styles.linkLabel}>{label}</Text>
+      </View>
+      <ChevronRight width={18} height={18} stroke={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: {
+    padding: spacing.sm,
+    borderRadius: radius.md,
+  },
+  headerTitle: {
+    ...typography.h3,
+    color: colors.primary,
+  },
+  scroll: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  brandSection: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  brandName: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
+  },
+  version: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  description: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    lineHeight: 24,
+    maxWidth: 300,
+  },
+  sectionLabel: {
+    ...typography.captionBold,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xl,
+    marginLeft: spacing.xs,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.lg,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+  },
+  linkLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  linkLabel: {
+    ...typography.caption,
+    color: colors.text,
+  },
+});

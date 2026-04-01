@@ -1,90 +1,283 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { Link } from "expo-router";
-import React from "react";
-import {
-    FlatList,
-    Text,
-    TouchableOpacity,
-    View,
-} from "react-native";
-import { Heart, Home, User } from 'react-native-feather';
-import Layout, { styles } from "../components/Layout";
-import NavItem from "./navigation/NavItem";
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInRight } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ProductCardSkeleton } from '../components/SkeletonLoader';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
+import type { Dupe, Product } from '../services/api';
+import { dataService } from '../services/api';
 
-export default function SearchResults() {
-  const navigation = useNavigation();
+export default function SearchResultsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ q?: string; productId?: string; productName?: string }>();
 
-  const dupes = [
-    { name: "e.l.f. Cosmetics Camo Liquid Blush", match: 98, price: "$7.00" },
-    { name: "NYX Sweet Cheeks Soft Cheek Tint", match: 95, price: "$8.99" },
-    { name: "Milani Cheek Kiss Liquid Blush", match: 92, price: "$9.99" },
-    { name: "Flower Beauty Blush Bomb", match: 89, price: "$9.98" },
-    { name: "Makeup Revolution Superdewy Liquid Blush", match: 85, price: "$7.00" },
-    { name: "Wet n Wild MegaGlo Liquid Blush", match: 78, price: "$4.99" },
-    { name: "Physicians Formula Happy Booster Blush", match: 72, price: "$10.95" },
-    { name: "Covergirl Clean Fresh Cream Blush", match: 68, price: "$8.47" },
-    { name: "L.A. Girl Blush Bomb Liquid Blush", match: 62, price: "$6.99" },
-  ];
+  const [dupes, setDupes] = useState<Dupe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sourceProduct, setSourceProduct] = useState<Product | null>(null);
 
-  const renderItem = ({ item }: any) => (
-    <Link href={{ pathname: "/productDetails", params: { id: "d1" } }} asChild>
-        <TouchableOpacity style={styles.searchResultsCard}>
-        {/* Image Placeholder */}
-        <View style={styles.imageBox}>
-            <Text style={styles.imageText}>Image</Text>
-        </View>
+  useEffect(() => {
+    loadDupes();
+  }, [params.productId, params.q]);
 
-        {/* Info */}
+  async function loadDupes() {
+    setLoading(true);
+    setError(null);
+    try {
+      let product: Product | null = null;
+
+      if (params.productId) {
+        product = await dataService.getProductById(params.productId);
+      } else if (params.q) {
+        const results = await dataService.searchProducts(params.q);
+        product = results[0] ?? null;
+      }
+
+      if (!product) {
+        setError('No product found');
+        setLoading(false);
+        return;
+      }
+
+      setSourceProduct(product);
+      const foundDupes = await dataService.findDupes(product);
+      setDupes(foundDupes);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const renderItem = ({ item, index }: { item: Dupe; index: number }) => (
+    <Animated.View entering={FadeInRight.delay(index * 80).duration(400)}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() =>
+          router.push({
+            pathname: '/productDetails',
+            params: {
+              dupeId: item.id,
+              originalId: item.original.id,
+              dupeProductId: item.dupe.id,
+              similarity: String(item.similarity),
+              savings: String(item.savings),
+            },
+          })
+        }
+      >
+        {item.dupe.image ? (
+          <Image source={{ uri: item.dupe.image }} style={styles.imageBox} contentFit="cover" />
+        ) : (
+          <View style={[styles.imageBox, styles.imagePlaceholder]}>
+            <Text style={{ fontSize: 28 }}>💄</Text>
+          </View>
+        )}
         <View style={styles.info}>
-            <Text style={styles.searchResultsName}>{item.name}</Text>
-
-            <View style={styles.matchRow}>
-            <Text style={styles.match}>{item.match}%</Text>
-            <Text style={styles.match}> match</Text>
+          <Text style={styles.brand}>{item.dupe.brand}</Text>
+          <Text style={styles.name} numberOfLines={2}>{item.dupe.name}</Text>
+          <View style={styles.matchRow}>
+            <View style={styles.matchBadge}>
+              <Text style={styles.matchText}>{item.similarity}% match</Text>
             </View>
+          </View>
         </View>
-
-        {/* Price */}
-        <View style={styles.priceBox}>
-            <Text style={styles.price}>{item.price}</Text>
+        <View style={styles.priceCol}>
+          <Text style={styles.dupePrice}>${item.dupe.price.toFixed(2)}</Text>
+          <Text style={styles.origPrice}>${item.original.price.toFixed(2)}</Text>
+          <Text style={styles.savingsText}>Save ${item.savings.toFixed(2)}</Text>
         </View>
-        </TouchableOpacity>
-    </Link>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   return (
-    <Layout>
-      <View style={styles.searchContainer}>
-        {/* Header */}
-        <View style={styles.searchResultsHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#820933" />
-          </TouchableOpacity>
-
-          <View style={styles.searchResultsHeaderCenter}>
-            <Text style={styles.searchResultsTitle}>Rare Beauty Soft Pinch</Text>
-            <Text style={styles.searchResultsSubtitle}>
-              {dupes.length} dupes found
-            </Text>
-          </View>
-
-          <View style={{ width: 24 }} />
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {sourceProduct?.name || params.productName || params.q || 'Results'}
+          </Text>
+          {!loading && (
+            <Text style={styles.headerSub}>{dupes.length} dupes found</Text>
+          )}
         </View>
+        <View style={{ width: 40 }} />
+      </View>
 
-        {/* List */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          {[1, 2, 3, 4].map(i => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </View>
+      ) : error ? (
+        <View style={styles.centerMessage}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={loadDupes} style={styles.retryBtn}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : dupes.length === 0 ? (
+        <View style={styles.centerMessage}>
+          <Text style={{ fontSize: 48, marginBottom: spacing.lg }}>🔍</Text>
+          <Text style={styles.emptyTitle}>No dupes found</Text>
+          <Text style={styles.emptySubtitle}>Try searching for a different product</Text>
+        </View>
+      ) : (
         <FlatList
           data={dupes}
-          keyExtractor={(_, i) => i.toString()}
+          keyExtractor={item => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.searchResultsList}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
         />
-    </View>
-        <View style={styles.bottomNav}>
-            <NavItem icon={Home} label="Home" href="/" />
-            <NavItem icon={Heart} label="Favorites" href="/favorites" />
-            <NavItem icon={User} label="Profile" href="/profile" />
-        </View>
-    </Layout>
+      )}
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: {
+    padding: spacing.sm,
+    borderRadius: radius.md,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  headerSub: {
+    ...typography.small,
+    color: colors.accent,
+    marginTop: 2,
+  },
+  loadingContainer: {
+    padding: spacing.lg,
+  },
+  centerMessage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryBtn: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+  },
+  retryText: {
+    color: colors.textOnPrimary,
+    ...typography.captionBold,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    color: colors.textSecondary,
+  },
+  emptySubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+  },
+  list: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  imageBox: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.md,
+    backgroundColor: colors.skeleton,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gradientStart,
+  },
+  info: {
+    flex: 1,
+    marginHorizontal: spacing.md,
+  },
+  brand: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  name: {
+    ...typography.captionBold,
+    color: colors.text,
+    marginTop: 2,
+  },
+  matchRow: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
+  matchBadge: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  matchText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  priceCol: {
+    alignItems: 'flex-end',
+  },
+  dupePrice: {
+    ...typography.bodyBold,
+    color: colors.success,
+  },
+  origPrice: {
+    ...typography.small,
+    color: colors.textMuted,
+    textDecorationLine: 'line-through',
+    marginTop: 2,
+  },
+  savingsText: {
+    ...typography.small,
+    color: colors.success,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+});
