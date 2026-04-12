@@ -1,16 +1,16 @@
-# models
-cosmetics_dupe_model/
-checkpoints/
-
-# embeddings
+# model artifacts
+*.pkl
 *.npy
-
-# FAISS
 *.faiss
 
-# dataset caches
-*.pkl
+# Model/checkpoint folders
+checkpoints_model/
+backend/cosmetics_dupe_model/
 
-# python
+# Optional generated metadata if recreated automatically
+backend/cosmetics_metadata.json
+
+# Python env
+.venv/
 __pycache__/
 *.pyc
