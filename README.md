@@ -115,29 +115,4 @@ npm run ios
 - The backend expects `backend/cosmetics_metadata.json`, `backend/cosmetics_index.faiss`, and `backend/cosmetics_dupe_model/` to be present.
 - Firebase credentials are local-only and intentionally ignored by Git.
 
-## What Should Be Committed
 
-Safe to commit:
-- app code
-- backend code
-- `package.json` / `package-lock.json`
-- `backend/requirements.txt`
-- model/index/data files required to run the backend
-
-Do not commit:
-- `backend/.venv/`
-- Firebase credential JSON files
-- `__pycache__/`
-- local checkpoints/caches
-
-## Push To GitHub
-
-After reviewing your changes:
-
-```bash
-git add .
-git commit -m "Refactor Duply app and backend for portable local setup"
-git push origin main
-```
-
-If your branch is not `main`, replace it with your branch name.
