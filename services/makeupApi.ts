@@ -1,4 +1,5 @@
 import type { Category, DataService, Dupe, Product, ProductColor } from './api';
+import { findDupesFromBackend, getProductByIdFromBackend, getProductsByCategoryFromBackend, searchProductsFromBackend } from './backendApi';
 
 const BASE_URL = 'https://makeup-api.herokuapp.com/api/v1/products.json';
 
@@ -83,86 +84,19 @@ async function fetchProducts(params: Record<string, string>): Promise<Product[]>
 
 export const makeupApiService: DataService = {
   async searchProducts(query: string): Promise<Product[]> {
-    const lowerQuery = query.toLowerCase();
-    const brands = ['maybelline', 'covergirl', 'nyx', "l'oreal", 'revlon', 'milani', 'almay', 'physicians formula', 'wet n wild', 'e.l.f.'];
-    const matchedBrand = brands.find(b => lowerQuery.includes(b));
-
-    const types = ['lipstick', 'foundation', 'mascara', 'blush', 'eyeshadow', 'eyeliner', 'nail_polish', 'bronzer'];
-    const matchedType = types.find(t => lowerQuery.includes(t));
-
-    const params: Record<string, string> = {};
-    if (matchedBrand) params.brand = matchedBrand;
-    if (matchedType) params.product_type = matchedType;
-
-    if (!matchedBrand && !matchedType) {
-      const results = await Promise.all([
-        fetchProducts({ brand: 'maybelline' }).catch(() => []),
-        fetchProducts({ brand: 'nyx' }).catch(() => []),
-        fetchProducts({ product_type: 'lipstick' }).catch(() => []),
-      ]);
-      const all = results.flat();
-      return all
-        .filter(p =>
-          p.name.toLowerCase().includes(lowerQuery) ||
-          p.brand.toLowerCase().includes(lowerQuery) ||
-          p.category.toLowerCase().includes(lowerQuery)
-        )
-        .slice(0, 20);
-    }
-
-    const products = await fetchProducts(params);
-    return products.slice(0, 20);
+    return searchProductsFromBackend(query);
   },
 
   async getProductsByCategory(category: string): Promise<Product[]> {
-    const typeMap: Record<string, string> = {
-      eyes: 'eyeshadow',
-      lips: 'lipstick',
-      face: 'foundation',
-      skin: 'blush',
-      eyeshadow: 'eyeshadow',
-      lipstick: 'lipstick',
-      foundation: 'foundation',
-      blush: 'blush',
-      mascara: 'mascara',
-      bronzer: 'bronzer',
-    };
-    const productType = typeMap[category.toLowerCase()] || 'lipstick';
-    return (await fetchProducts({ product_type: productType })).slice(0, 20);
+    return getProductsByCategoryFromBackend(category);
   },
 
   async getProductById(id: string): Promise<Product | null> {
-    for (const products of productCache.values()) {
-      const found = products.find(p => p.id === id);
-      if (found) return found;
-    }
-    try {
-      const res = await fetch(`${BASE_URL}?id=${id}`);
-      if (!res.ok) return null;
-      const raw: MakeupApiProduct[] = await res.json();
-      return raw.length > 0 ? transformProduct(raw[0]) : null;
-    } catch {
-      return null;
-    }
+    return getProductByIdFromBackend(id);
   },
 
   async findDupes(product: Product): Promise<Dupe[]> {
-    const allProducts = await fetchProducts({ product_type: product.productType });
-
-    return allProducts
-      .filter(p => p.id !== product.id && p.price < product.price && p.price > 0)
-      .map(p => {
-        const similarity = computeSimilarity(product, p);
-        return {
-          id: `dupe-${product.id}-${p.id}`,
-          original: product,
-          dupe: p,
-          similarity,
-          savings: Math.round((product.price - p.price) * 100) / 100,
-        };
-      })
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 10);
+    return findDupesFromBackend(product);
   },
 
   async getCategories(): Promise<Category[]> {

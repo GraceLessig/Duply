@@ -32,6 +32,8 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env.*
 
 # typescript
 *.tsbuildinfo
@@ -41,3 +43,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Python / backend local state
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/checkpoints/
+backend/firebase-service-account.json
+backend/firebase-credentials.json
+*.sqlite3

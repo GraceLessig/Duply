@@ -65,6 +65,7 @@ export default function SearchResultsScreen() {
               originalId: item.original.id,
               dupeProductId: item.dupe.id,
               similarity: String(item.similarity),
+              matchReason: item.matchReason || '',
               savings: String(item.savings),
             },
           })
@@ -85,6 +86,9 @@ export default function SearchResultsScreen() {
               <Text style={styles.matchText}>{item.similarity}% match</Text>
             </View>
           </View>
+          {item.matchReason ? (
+            <Text style={styles.matchReason} numberOfLines={2}>{item.matchReason}</Text>
+          ) : null}
         </View>
         <View style={styles.priceCol}>
           <Text style={styles.dupePrice}>${item.dupe.price.toFixed(2)}</Text>
@@ -260,6 +264,11 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.primary,
     fontWeight: '600',
+  },
+  matchReason: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 4,
   },
   priceCol: {
     alignItems: 'flex-end',

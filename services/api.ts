@@ -7,6 +7,14 @@ export interface Product {
   rating: number;
   category: string;
   productType: string;
+  countryOfOrigin?: string;
+  crueltyFree?: string;
+  genderTarget?: string;
+  mainIngredient?: string;
+  numberOfReviews?: number;
+  packagingType?: string;
+  productSize?: string;
+  skinType?: string;
   description?: string;
   tags?: string[];
   colors?: ProductColor[];
@@ -22,6 +30,7 @@ export interface Dupe {
   original: Product;
   dupe: Product;
   similarity: number;
+  matchReason?: string;
   savings: number;
 }
 
@@ -42,5 +51,6 @@ export interface DataService {
   getFeaturedDupes(): Promise<Dupe[]>;
 }
 
-// Switch this import to firebaseApi when the backend is ready
+// The app uses the local backend service, which handles Firestore reads
+// and model-powered dupe lookup behind a single data service interface.
 export { makeupApiService as dataService } from './makeupApi';

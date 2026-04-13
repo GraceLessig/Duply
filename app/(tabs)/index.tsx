@@ -1,19 +1,31 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Menu, Search, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
-import { DupeCardSkeleton } from '../../components/SkeletonLoader';
+import { ProductCardSkeleton } from '../../components/SkeletonLoader';
 import { colors, gradients, radius, shadows, spacing, typography } from '../../constants/theme';
-import { useFeaturedDupes } from '../../hooks/useProducts';
+import { useActivity } from '../../hooks/useActivity';
+import { useSearch } from '../../hooks/useProducts';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const { data: featured, loading } = useFeaturedDupes();
+  const { results, loading: searchLoading, error: searchError, search } = useSearch();
+  const { recentViews, loaded: activityLoaded, addRecentSearch } = useActivity();
+  const showingSuggestions = query.trim().length > 0;
+
+  const openProduct = (id: string, name: string) => {
+    addRecentSearch(query);
+    router.push({
+      pathname: '/productDetails',
+      params: { id, productName: name },
+    });
+    setQuery('');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -27,6 +39,9 @@ export default function HomeScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
+          <View style={styles.kicker}>
+            <Text style={styles.kickerText}>Beauty finds, but cheaper</Text>
+          </View>
           <Animated.View entering={FadeInDown.delay(100).duration(500)}>
             <Text style={styles.heading}>Find Your{'\n'}Perfect Dupe</Text>
           </Animated.View>
@@ -37,22 +52,72 @@ export default function HomeScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400).duration(500)} style={{ width: '100%' }}>
-            <View style={styles.searchBar}>
-              <Search width={20} height={20} stroke={colors.accent} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={() => {
-                  if (query.trim()) {
-                    router.push({ pathname: '/searchResults', params: { q: query.trim() } });
-                    setQuery('');
-                  }
-                }}
-                placeholder="Search products..."
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="search"
-                style={styles.searchInput}
-              />
+            <View style={styles.searchArea}>
+              <View style={styles.searchBar}>
+                <Search width={20} height={20} stroke={colors.accent} />
+                <TextInput
+                  value={query}
+                  onChangeText={(text) => {
+                    setQuery(text);
+                    search(text);
+                  }}
+                  onSubmitEditing={() => {
+                    if (results.length > 0) {
+                      openProduct(results[0].id, results[0].name);
+                    }
+                  }}
+                  placeholder="Search products..."
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="search"
+                  style={styles.searchInput}
+                />
+                {searchLoading ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : null}
+              </View>
+
+              {showingSuggestions ? (
+                <View style={styles.suggestionsPanel}>
+                  {searchLoading ? (
+                    <View style={styles.suggestionsLoading}>
+                      {[1, 2, 3].map(i => (
+                        <ProductCardSkeleton key={i} />
+                      ))}
+                    </View>
+                  ) : searchError ? (
+                    <View style={styles.suggestionsState}>
+                      <Text style={styles.suggestionsTitle}>Search unavailable</Text>
+                      <Text style={styles.suggestionsSubtitle}>{searchError}</Text>
+                    </View>
+                  ) : results.length > 0 ? (
+                    <FlatList
+                      data={results}
+                      keyExtractor={item => item.id}
+                      keyboardShouldPersistTaps="handled"
+                      style={styles.suggestionsList}
+                      contentContainerStyle={styles.suggestionsListContent}
+                      ItemSeparatorComponent={() => <View style={styles.suggestionDivider} />}
+                      renderItem={({ item }) => (
+                        <Pressable
+                          style={({ pressed }) => [styles.suggestionItem, pressed && { opacity: 0.7 }]}
+                          onPress={() => openProduct(item.id, item.name)}
+                        >
+                          <View style={styles.suggestionText}>
+                            <Text style={styles.suggestionBrand}>{item.brand}</Text>
+                            <Text style={styles.suggestionName} numberOfLines={1}>{item.name}</Text>
+                          </View>
+                          <Text style={styles.suggestionPrice}>${item.price.toFixed(2)}</Text>
+                        </Pressable>
+                      )}
+                    />
+                  ) : (
+                    <View style={styles.suggestionsState}>
+                      <Text style={styles.suggestionsTitle}>No products found</Text>
+                      <Text style={styles.suggestionsSubtitle}>Keep typing to narrow the database results</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
             </View>
           </Animated.View>
         </LinearGradient>
@@ -60,35 +125,33 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.section}>
           <View style={styles.sectionHeader}>
             <TrendingUp width={20} height={20} stroke={colors.primary} />
-            <Text style={styles.sectionTitle}>Trending Dupes</Text>
+            <Text style={styles.sectionTitle}>Recently Viewed</Text>
           </View>
 
-          {loading ? (
+          {!activityLoaded ? (
             <FlatList
               horizontal
               data={[1, 2, 3]}
               keyExtractor={i => String(i)}
-              renderItem={() => <DupeCardSkeleton />}
+              renderItem={() => <ProductCardSkeleton />}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
             />
-          ) : (
+          ) : recentViews.length > 0 ? (
             <FlatList
               horizontal
-              data={featured || []}
+              data={recentViews}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
                 <ProductCard
-                  name={item.dupe.name}
-                  brand={item.dupe.brand}
-                  price={item.dupe.price}
-                  image={item.dupe.image}
-                  matchPercent={item.similarity}
-                  originalPrice={item.original.price}
+                  name={item.name}
+                  brand={item.brand}
+                  price={item.price}
+                  image={item.image}
                   onPress={() =>
                     router.push({
                       pathname: '/productDetails',
-                      params: { id: item.id, fromFeatured: '1' },
+                      params: { id: item.id, productName: item.name },
                     })
                   }
                 />
@@ -97,6 +160,16 @@ export default function HomeScreen() {
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
             />
+          ) : (
+            <View style={styles.emptyActivityCard}>
+              <Text style={styles.emptyActivityTitle}>No recent views yet</Text>
+              <Text style={styles.emptyActivitySubtitle}>
+                Search products or browse a category and the ones you open will show up here.
+              </Text>
+              <Pressable onPress={() => router.push('/categories')} style={styles.emptyActivityButton}>
+                <Text style={styles.emptyActivityButtonText}>Browse Categories</Text>
+              </Pressable>
+            </View>
           )}
         </Animated.View>
 
@@ -117,13 +190,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(247,217,227,0.75)',
   },
   menuBtn: {
     padding: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceElevated,
   },
   brand: {
     ...typography.hero,
@@ -134,37 +208,62 @@ const styles = StyleSheet.create({
   },
   hero: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl + 10,
+    paddingTop: spacing.xxxl,
     paddingBottom: spacing.xxl,
     alignItems: 'center',
+    overflow: 'visible',
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+  },
+  kicker: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.66)',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  kickerText: {
+    ...typography.smallBold,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
   },
   heading: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: -1.2,
     color: colors.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
+    lineHeight: 44,
   },
   sub: {
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.xxl,
-    maxWidth: 280,
-    lineHeight: 22,
+    maxWidth: 310,
+    lineHeight: 24,
+  },
+  searchArea: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 20,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.86)',
     borderRadius: radius.full,
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: spacing.xl,
     width: '100%',
-    borderWidth: 2,
-    borderColor: colors.accentLight,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
     ...shadows.lg,
   },
   searchInput: {
@@ -173,8 +272,74 @@ const styles = StyleSheet.create({
     color: colors.primary,
     padding: 0,
   },
+  suggestionsPanel: {
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(247,217,227,0.9)',
+    maxHeight: 320,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  suggestionsLoading: {
+    padding: spacing.md,
+  },
+  suggestionsList: {
+    maxHeight: 320,
+  },
+  suggestionsListContent: {
+    paddingVertical: spacing.xs,
+  },
+  suggestionsState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+  },
+  suggestionsTitle: {
+    ...typography.captionBold,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  suggestionsSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  suggestionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: spacing.lg,
+    marginRight: spacing.lg,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  suggestionBrand: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  suggestionName: {
+    ...typography.captionBold,
+    color: colors.text,
+    marginTop: 2,
+  },
+  suggestionPrice: {
+    ...typography.captionBold,
+    color: colors.success,
+  },
   section: {
-    paddingTop: spacing.xl,
+    paddingTop: spacing.xxl,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -189,5 +354,36 @@ const styles = StyleSheet.create({
   },
   horizontalList: {
     paddingHorizontal: spacing.lg,
+  },
+  emptyActivityCard: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    ...shadows.sm,
+  },
+  emptyActivityTitle: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  emptyActivitySubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    lineHeight: 20,
+  },
+  emptyActivityButton: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  emptyActivityButtonText: {
+    ...typography.captionBold,
+    color: colors.textOnPrimary,
   },
 });

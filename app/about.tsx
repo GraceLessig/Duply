@@ -20,12 +20,30 @@ export default function AboutScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.brandSection}>
-          <Text style={styles.brandName}>düply</Text>
+          <Text style={styles.brandName}>Duply</Text>
           <Text style={styles.version}>Version 1.0.0</Text>
           <Text style={styles.description}>
-            Find affordable alternatives to your favorite beauty products. Compare
-            formulas, shades, and prices — all in one place.
+            Search products from your Firestore catalog, open rich product pages,
+            and compare model-ranked dupes with explainable match scores.
           </Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>How It Works</Text>
+        <View style={styles.card}>
+          <InfoRow
+            title="Search"
+            body="Suggestions come from your database as the user types, then Enter picks the top result."
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            title="Product Details"
+            body="Each product page can show ingredient, packaging, skin type, size, country, review count, and more."
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            title="Dupe Matching"
+            body="The backend model ranks likely dupes, and the UI explains each match using overlapping product fields."
+          />
         </View>
 
         <Text style={styles.sectionLabel}>Legal</Text>
@@ -38,6 +56,15 @@ export default function AboutScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function InfoRow({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoTitle}>{title}</Text>
+      <Text style={styles.infoBody}>{body}</Text>
+    </View>
   );
 }
 
@@ -101,7 +128,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.lg,
     lineHeight: 24,
-    maxWidth: 300,
+    maxWidth: 320,
   },
   sectionLabel: {
     ...typography.captionBold,
@@ -121,6 +148,18 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginHorizontal: spacing.lg,
+  },
+  infoRow: {
+    padding: spacing.lg,
+  },
+  infoTitle: {
+    ...typography.captionBold,
+    color: colors.text,
+  },
+  infoBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   linkRow: {
     flexDirection: 'row',

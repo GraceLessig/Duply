@@ -1,85 +1,123 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import React from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Heart, Trash2 } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, gradients, radius, shadows, spacing, typography } from '../../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useFavorites } from '../../hooks/useFavorites';
 
 export default function FavoritesScreen() {
   const router = useRouter();
-  const { favorites, loaded, removeFavorite } = useFavorites();
+  const { favorites, loaded, removeFavorite, clearFavorites } = useFavorites();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <View style={{ width: 40 }} />
-        <Text style={styles.title}>Favorites</Text>
-        <View style={{ width: 40 }} />
+        <View>
+          <Text style={styles.title}>Favorites</Text>
+          <Text style={styles.subtitle}>{favorites.length} saved item{favorites.length === 1 ? '' : 's'}</Text>
+        </View>
+        {favorites.length > 0 ? (
+          <Pressable onPress={clearFavorites} style={styles.clearBtn}>
+            <Text style={styles.clearText}>Clear all</Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 64 }} />
+        )}
       </View>
 
       {!loaded ? null : favorites.length === 0 ? (
-        <LinearGradient colors={[...gradients.main]} style={styles.emptyContainer}>
+        <View style={styles.emptyContainer}>
           <View style={styles.emptyState}>
             <View style={styles.iconCircle}>
-              <Heart width={40} height={40} stroke={colors.accentLight} />
+              <Heart width={36} height={36} stroke={colors.accent} />
             </View>
-            <Text style={styles.emptyTitle}>No favorites yet</Text>
+            <Text style={styles.emptyTitle}>Nothing saved yet</Text>
             <Text style={styles.emptySubtitle}>
-              Tap the heart icon on any dupe to save it here
+              Save full product pages or dupe comparisons and they’ll live here.
             </Text>
             <Link href="/search" asChild>
               <Pressable style={styles.button}>
-                <Text style={styles.buttonText}>Browse Dupes</Text>
+                <Text style={styles.buttonText}>Start Exploring</Text>
               </Pressable>
             </Link>
           </View>
-        </LinearGradient>
+        </View>
       ) : (
         <FlatList
           data={favorites}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 80).duration(300)}>
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
-                onPress={() =>
-                  router.push({
-                    pathname: '/productDetails',
-                    params: { id: item.id },
-                  })
-                }
-              >
-                <Image
-                  source={{ uri: item.dupeImage }}
-                  style={styles.cardImage}
-                  contentFit="cover"
-                />
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardBrand}>{item.dupeBrand}</Text>
-                  <Text style={styles.cardName} numberOfLines={1}>{item.dupeName}</Text>
-                  <View style={styles.cardRow}>
-                    <View style={styles.matchBadge}>
-                      <Text style={styles.matchText}>{item.similarity}% match</Text>
-                    </View>
-                    <Text style={styles.cardPrice}>${item.dupePrice.toFixed(2)}</Text>
-                  </View>
-                </View>
+          renderItem={({ item, index }) => {
+            const isComparison = (item.kind || 'comparison') === 'comparison';
+
+            return (
+              <Animated.View entering={FadeInDown.delay(index * 70).duration(280)}>
                 <Pressable
-                  onPress={() => removeFavorite(item.id)}
-                  style={styles.removeBtn}
-                  hitSlop={12}
+                  style={({ pressed }) => [styles.card, pressed && { opacity: 0.88 }]}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/productDetails',
+                      params: isComparison
+                        ? {
+                            dupeId: item.id,
+                            originalId: item.originalId,
+                            dupeProductId: item.dupeProductId,
+                            similarity: String(item.similarity),
+                            matchReason: item.matchReason || '',
+                            savings: String(item.savings),
+                          }
+                        : {
+                            id: item.originalId || item.id,
+                            productName: item.originalName,
+                          },
+                    })
+                  }
                 >
-                  <Trash2 width={18} height={18} stroke={colors.textMuted} />
+                  <Image
+                    source={{ uri: isComparison ? item.dupeImage : item.originalImage }}
+                    style={styles.cardImage}
+                    contentFit="cover"
+                  />
+
+                  <View style={styles.cardInfo}>
+                    <View style={styles.badgeRow}>
+                      <View style={[styles.kindBadge, isComparison ? styles.comparisonBadge : styles.productBadge]}>
+                        <Text style={styles.kindBadgeText}>{isComparison ? 'Comparison' : 'Product'}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.cardBrand}>{isComparison ? item.dupeBrand : item.originalBrand}</Text>
+                    <Text style={styles.cardName} numberOfLines={2}>
+                      {isComparison ? item.dupeName : item.originalName}
+                    </Text>
+
+                    <View style={styles.cardRow}>
+                      <Text style={styles.cardPrice}>
+                        ${(isComparison ? item.dupePrice : item.originalPrice).toFixed(2)}
+                      </Text>
+                      {isComparison ? (
+                        <Text style={styles.secondaryMeta}>Save ${item.savings.toFixed(2)}</Text>
+                      ) : (
+                        <Text style={styles.secondaryMeta}>Saved product page</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <Pressable
+                    onPress={() => removeFavorite(item.id)}
+                    style={styles.removeBtn}
+                    hitSlop={12}
+                  >
+                    <Trash2 width={18} height={18} stroke={colors.textMuted} />
+                  </Pressable>
                 </Pressable>
-              </Pressable>
-            </Animated.View>
-          )}
+              </Animated.View>
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -89,7 +127,7 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -97,7 +135,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -105,35 +143,53 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.primary,
   },
+  subtitle: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  clearBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceElevated,
+  },
+  clearText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
+    backgroundColor: colors.gradientStart,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.xxxl,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xl,
+    ...shadows.md,
   },
   emptyTitle: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.primary,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: 'center',
-    maxWidth: 240,
+    maxWidth: 260,
+    lineHeight: 20,
   },
   button: {
     marginTop: spacing.xl,
@@ -153,21 +209,42 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
     padding: spacing.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
     ...shadows.sm,
   },
   cardImage: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
+    width: 64,
+    height: 64,
+    borderRadius: radius.lg,
     backgroundColor: colors.skeleton,
   },
   cardInfo: {
     flex: 1,
     marginHorizontal: spacing.md,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    marginBottom: spacing.xs,
+  },
+  kindBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  comparisonBadge: {
+    backgroundColor: '#fff3a8',
+  },
+  productBadge: {
+    backgroundColor: colors.accentLight,
+  },
+  kindBadgeText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   cardBrand: {
     ...typography.small,
@@ -176,28 +253,22 @@ const styles = StyleSheet.create({
   cardName: {
     ...typography.captionBold,
     color: colors.text,
-    marginTop: 1,
+    marginTop: 2,
   },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  matchBadge: {
-    backgroundColor: colors.accentLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  matchText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '600',
+    marginTop: spacing.sm,
+    flexWrap: 'wrap',
   },
   cardPrice: {
-    ...typography.captionBold,
-    color: colors.success,
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  secondaryMeta: {
+    ...typography.small,
+    color: colors.textSecondary,
   },
   removeBtn: {
     padding: spacing.sm,

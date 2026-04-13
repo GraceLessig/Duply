@@ -1,57 +1,143 @@
 # Duply
 
-A beauty product dupe finder built with React Native and Expo.
+Duply is an Expo + React Native beauty dupe app with a FastAPI backend.
 
-## Getting Started
+The app now uses:
+- local/backend-powered product search
+- metadata-backed product pages
+- model-ranked dupe comparisons
+- local favorites, profile, recent searches, and recent views
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+- Frontend: Expo, React Native, Expo Router, TypeScript
+- Backend: FastAPI, sentence-transformers, FAISS
+- Product data: `backend/cosmetics_metadata.json`
+- Local persistence: AsyncStorage
 
-2. Start the app
+## Repo Setup
 
-   ```bash
-   npx expo start
-   ```
+### 1. Clone
 
-## Architecture
-
-- **Expo Router** with file-based routing (tabs + stack navigation)
-- **Makeup API** as temporary data source (swappable to Firebase)
-- **AsyncStorage** for local favorites persistence
-- **React Native Reanimated** for smooth animations
-- **expo-image** for optimized image loading
-
-## Project Structure
-
-```
-app/
-  (tabs)/           Tab screens (Home, Favorites, Profile)
-  categories.tsx    Categories stack screen
-  search.tsx        Search stack screen
-  searchResults.tsx Search results with dupe matching
-  productDetails.tsx Product comparison view
-services/
-  api.ts            Data service interface
-  makeupApi.ts      Makeup API implementation
-  firebaseApi.ts    Firebase stub (for teammate integration)
-hooks/
-  useProducts.ts    Data fetching hooks
-  useFavorites.ts   Favorites persistence hooks
-components/
-  ProductCard.tsx   Reusable product card
-  SkeletonLoader.tsx Loading skeletons
-  MatchBadge.tsx    Match percentage badge
-constants/
-  theme.ts          Design tokens (colors, typography, spacing)
+```bash
+git clone https://github.com/GraceLessig/Duply.git
+cd Duply
 ```
 
-## Switching to Firebase
+### 2. Frontend install
 
-When the Firebase backend is ready, update `services/api.ts`:
-
-```ts
-export { firebaseApiService as dataService } from './firebaseApi';
+```bash
+npm install
 ```
+
+### 3. Backend install
+
+Create a Python virtual environment inside `backend/`, then install the backend dependencies:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+On macOS/Linux:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+## Firebase Credentials
+
+Do not commit Firebase service account JSON files.
+
+Create a Firebase Admin SDK service account key and either:
+
+1. Place it at:
+
+```text
+backend/firebase-service-account.json
+```
+
+2. Or point to it with an environment variable:
+
+```powershell
+$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\path\to\firebase-service-account.json"
+```
+
+There is an example file at:
+
+```text
+backend/.env.example
+```
+
+## Run The Backend
+
+From the repo root on Windows:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+On macOS/Linux:
+
+```bash
+cd backend
+.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+## Run The Frontend
+
+From the repo root:
+
+```bash
+npm start
+```
+
+Or:
+
+```bash
+npm run web
+npm run android
+npm run ios
+```
+
+## Project Notes
+
+- Product suggestions and category browsing are backed by the local cosmetics metadata index for speed.
+- Product details and dupe logic are resolved through the backend.
+- The backend expects `backend/cosmetics_metadata.json`, `backend/cosmetics_index.faiss`, and `backend/cosmetics_dupe_model/` to be present.
+- Firebase credentials are local-only and intentionally ignored by Git.
+
+## What Should Be Committed
+
+Safe to commit:
+- app code
+- backend code
+- `package.json` / `package-lock.json`
+- `backend/requirements.txt`
+- model/index/data files required to run the backend
+
+Do not commit:
+- `backend/.venv/`
+- Firebase credential JSON files
+- `__pycache__/`
+- local checkpoints/caches
+
+## Push To GitHub
+
+After reviewing your changes:
+
+```bash
+git add .
+git commit -m "Refactor Duply app and backend for portable local setup"
+git push origin main
+```
+
+If your branch is not `main`, replace it with your branch name.

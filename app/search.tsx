@@ -1,23 +1,45 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Clock, Search, X } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, gradients, radius, shadows, spacing, typography } from '../constants/theme';
-import { searchHistorySample } from '../data/products';
+import { useActivity } from '../hooks/useActivity';
 import { useSearch } from '../hooks/useProducts';
 
 export default function SearchScreen() {
-  const [searchHistory, setSearchHistory] = useState<string[]>(searchHistorySample);
-  const [query, setQuery] = useState('');
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(params.q || '');
   const router = useRouter();
-  const { results, loading, search } = useSearch();
+  const { results, loading, error, search } = useSearch();
+  const { recentSearches, addRecentSearch, removeRecentSearch } = useActivity();
+
+  const showingSuggestions = query.trim().length > 0;
+
+  useEffect(() => {
+    if (params.q) {
+      setQuery(params.q);
+      search(params.q);
+    }
+  }, [params.q, search]);
 
   const removeHistoryItem = (index: number) => {
-    setSearchHistory(prev => prev.filter((_, i) => i !== index));
+    const item = recentSearches[index];
+    if (item) {
+      removeRecentSearch(item);
+    }
+  };
+
+  const openProduct = (id: string, name: string) => {
+    addRecentSearch(query);
+
+    router.push({
+      pathname: '/productDetails',
+      params: { id, productName: name },
+    });
   };
 
   const handleChangeText = (text: string) => {
@@ -26,21 +48,73 @@ export default function SearchScreen() {
   };
 
   const handleSubmit = () => {
-    if (!query.trim()) return;
-    setSearchHistory(prev => {
-      const filtered = prev.filter(i => i !== query);
-      return [query, ...filtered].slice(0, 10);
-    });
-    router.push({ pathname: '/searchResults', params: { q: query } });
+    if (!showingSuggestions || results.length === 0) return;
+    openProduct(results[0].id, results[0].name);
   };
 
   const handleHistoryTap = (item: string) => {
     setQuery(item);
     search(item);
-    router.push({ pathname: '/searchResults', params: { q: item } });
   };
 
-  const showingResults = query.trim().length > 0;
+  const renderSuggestions = () => {
+    if (!showingSuggestions) return null;
+
+    return (
+      <View style={styles.suggestionsPanel}>
+        <View style={styles.suggestionsHeader}>
+          <Text style={styles.suggestionsTitle}>Suggestions</Text>
+          <Text style={styles.suggestionsSubtitle}>Press Enter to pick the top result</Text>
+        </View>
+
+        {loading ? (
+          <View style={styles.suggestionsLoading}>
+            {[1, 2, 3].map(i => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </View>
+        ) : error ? (
+          <View style={styles.suggestionsState}>
+            <Text style={styles.stateTitle}>Search unavailable</Text>
+            <Text style={styles.stateSubtitle}>{error}</Text>
+          </View>
+        ) : results.length > 0 ? (
+          <FlatList
+            data={results}
+            keyExtractor={item => item.id}
+            keyboardShouldPersistTaps="handled"
+            style={styles.suggestionsList}
+            contentContainerStyle={styles.suggestionsListContent}
+            ItemSeparatorComponent={() => <View style={styles.resultDivider} />}
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [styles.resultItem, pressed && styles.resultItemPressed]}
+                onPress={() => openProduct(item.id, item.name)}
+              >
+                {item.image ? (
+                  <Image source={{ uri: item.image }} style={styles.resultImage} contentFit="cover" />
+                ) : (
+                  <View style={[styles.resultImage, styles.resultImagePlaceholder]}>
+                    <Text style={styles.placeholderEmoji}>ðŸ’„</Text>
+                  </View>
+                )}
+                <View style={styles.resultInfo}>
+                  <Text style={styles.resultBrand}>{item.brand}</Text>
+                  <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.resultPrice}>${item.price.toFixed(2)}</Text>
+                </View>
+              </Pressable>
+            )}
+          />
+        ) : (
+          <View style={styles.suggestionsState}>
+            <Text style={styles.stateTitle}>No products found</Text>
+            <Text style={styles.stateSubtitle}>Keep typing to narrow the database results</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -64,64 +138,30 @@ export default function SearchScreen() {
             autoFocus
             returnKeyType="search"
           />
-          {loading && (
+          {loading ? (
             <ActivityIndicator
               size="small"
               color={colors.accent}
               style={styles.spinner}
             />
-          )}
+          ) : null}
         </View>
+
+        {renderSuggestions()}
       </View>
 
       <LinearGradient colors={[...gradients.main]} style={styles.content}>
-        {showingResults && results.length > 0 ? (
-          <FlatList
-            data={results}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [styles.resultItem, pressed && { opacity: 0.7 }]}
-                onPress={() =>
-                  router.push({
-                    pathname: '/searchResults',
-                    params: { productId: item.id, productName: item.name },
-                  })
-                }
-              >
-                {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.resultImage} contentFit="cover" />
-                ) : (
-                  <View style={[styles.resultImage, styles.resultImagePlaceholder]}>
-                    <Text style={{ fontSize: 20 }}>💄</Text>
-                  </View>
-                )}
-                <View style={styles.resultInfo}>
-                  <Text style={styles.resultBrand}>{item.brand}</Text>
-                  <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.resultPrice}>${item.price.toFixed(2)}</Text>
-                </View>
-              </Pressable>
-            )}
-            contentContainerStyle={{ paddingBottom: 80, paddingTop: spacing.md }}
-          />
-        ) : showingResults && loading ? (
-          <View style={styles.loadingContainer}>
-            {[1, 2, 3].map(i => (
-              <ProductCardSkeleton key={i} />
-            ))}
-          </View>
-        ) : (
+        {!showingSuggestions ? (
           <>
             <View style={styles.historyHeader}>
               <Text style={styles.historyTitle}>Recent Searches</Text>
             </View>
             <FlatList
-              data={searchHistory}
+              data={recentSearches}
               keyExtractor={(_, index) => index.toString()}
               renderItem={({ item, index }) => (
                 <Pressable
-                  style={({ pressed }) => [styles.historyItem, pressed && { opacity: 0.7 }]}
+                  style={({ pressed }) => [styles.historyItem, pressed && styles.resultItemPressed]}
                   onPress={() => handleHistoryTap(item)}
                 >
                   <View style={styles.historyLeft}>
@@ -133,10 +173,10 @@ export default function SearchScreen() {
                   </Pressable>
                 </Pressable>
               )}
-              contentContainerStyle={{ paddingBottom: 80 }}
+              contentContainerStyle={styles.historyList}
             />
           </>
-        )}
+        ) : null}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -148,11 +188,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   topBarSearch: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+    zIndex: 20,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -183,31 +224,85 @@ const styles = StyleSheet.create({
     right: spacing.md,
   },
   input: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     paddingLeft: 40,
     paddingRight: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: colors.accentLight,
     borderRadius: radius.full,
     color: colors.primary,
     ...typography.body,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  suggestionsPanel: {
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 380,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  suggestionsHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  suggestionsTitle: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  suggestionsSubtitle: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  suggestionsLoading: {
+    padding: spacing.md,
+  },
+  suggestionsList: {
+    maxHeight: 320,
+  },
+  suggestionsListContent: {
+    paddingVertical: spacing.xs,
+  },
+  suggestionsState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+  },
+  stateTitle: {
+    ...typography.captionBold,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  resultDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: 76,
   },
   content: {
     flex: 1,
-  },
-  loadingContainer: {
-    padding: spacing.lg,
   },
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  resultItemPressed: {
+    opacity: 0.7,
   },
   resultImage: {
     width: 48,
@@ -219,6 +314,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.gradientStart,
+  },
+  placeholderEmoji: {
+    fontSize: 20,
   },
   resultInfo: {
     flex: 1,
@@ -247,15 +345,20 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginBottom: spacing.sm,
   },
+  historyList: {
+    paddingBottom: 80,
+  },
   historyItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
     padding: spacing.md,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
     ...shadows.sm,
   },
   historyLeft: {

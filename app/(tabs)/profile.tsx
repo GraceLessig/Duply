@@ -1,20 +1,26 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { DollarSign, Heart, Info, Settings, User } from 'react-native-feather';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Bookmark, DollarSign, Info, RefreshCw, Settings, Star, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, gradients, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useFavorites } from '../../hooks/useFavorites';
+import { useProfile } from '../../hooks/useProfile';
+
+const SKIN_TYPES = ['Dry', 'Oily', 'Combination', 'Sensitive', 'Normal'];
+const FAVORITE_CATEGORIES = ['Foundation', 'Lipstick', 'Mascara', 'Blush', 'Eyeshadow', 'Bronzer'];
+const BUDGETS = ['Under $15', '$15-$25', '$25-$50', '$50+'];
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { favorites } = useFavorites();
+  const { profile, loaded, updateProfile, resetProfile } = useProfile();
 
-  const userName = 'Beauty Lover';
-  const userEmail = 'beauty@example.com';
-  const savedDupes = favorites.length;
-  const totalSavings = favorites.reduce((sum, f) => sum + f.savings, 0);
+  const savedItems = favorites.length;
+  const totalSavings = favorites.reduce((sum, item) => sum + item.savings, 0);
+  const savedProducts = favorites.filter(item => (item.kind || 'comparison') === 'product').length;
+  const savedComparisons = favorites.filter(item => (item.kind || 'comparison') === 'comparison').length;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -23,38 +29,87 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <User width={32} height={32} stroke={colors.primary} />
           </View>
-          <Text style={styles.name}>{userName}</Text>
-          <Text style={styles.email}>{userEmail}</Text>
+          <Text style={styles.name}>{profile.displayName}</Text>
+          <Text style={styles.email}>Your beauty dupe dashboard</Text>
         </LinearGradient>
 
         <View style={styles.statsWrapper}>
           <View style={styles.statsCard}>
             <View style={styles.statsRow}>
-              <StatItem
-                icon={Heart}
-                value={savedDupes}
-                label="Saved Dupes"
-                bg={colors.accentLight}
-                color={colors.primary}
-              />
-              <StatItem
-                icon={DollarSign}
-                value={`$${totalSavings.toFixed(0)}`}
-                label="Total Savings"
-                bg={colors.successLight}
-                color={colors.success}
-              />
+              <StatItem icon={Bookmark} value={savedItems} label="Saved" bg={colors.accentLight} color={colors.primary} />
+              <StatItem icon={DollarSign} value={`$${totalSavings.toFixed(0)}`} label="Savings" bg={colors.successLight} color={colors.success} />
+              <StatItem icon={Star} value={savedComparisons} label="Comparisons" bg="#fff3a8" color="#8a4b00" />
+            </View>
+            <Text style={styles.statsCaption}>
+              {savedProducts} saved product page{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe comparison{savedComparisons === 1 ? '' : 's'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Profile</Text>
+          <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Display Name</Text>
+            <TextInput
+              value={profile.displayName}
+              onChangeText={text => updateProfile({ displayName: text })}
+              placeholder="Add your name"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.fieldLabel}>Skin Type</Text>
+            <View style={styles.chipsWrap}>
+              {SKIN_TYPES.map(item => (
+                <Chip
+                  key={item}
+                  label={item}
+                  active={profile.skinType === item}
+                  onPress={() => updateProfile({ skinType: item })}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabel}>Favorite Category</Text>
+            <View style={styles.chipsWrap}>
+              {FAVORITE_CATEGORIES.map(item => (
+                <Chip
+                  key={item}
+                  label={item}
+                  active={profile.favoriteCategory === item}
+                  onPress={() => updateProfile({ favoriteCategory: item })}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabel}>Budget</Text>
+            <View style={styles.chipsWrap}>
+              {BUDGETS.map(item => (
+                <Chip
+                  key={item}
+                  label={item}
+                  active={profile.budget === item}
+                  onPress={() => updateProfile({ budget: item })}
+                />
+              ))}
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
-          <View style={styles.settingsBox}>
-            <SettingsRow icon={Settings} label="Account Settings" onPress={() => router.push('/settings' as Href)} />
+          <Text style={styles.sectionTitle}>Quick Links</Text>
+          <View style={styles.card}>
+            <SettingsRow icon={Settings} label="Settings" onPress={() => router.push('/settings' as Href)} />
             <SettingsRow icon={Info} label="About" onPress={() => router.push('/about' as Href)} />
+            <SettingsRow icon={RefreshCw} label="Reset Profile" onPress={resetProfile} danger />
           </View>
         </View>
+
+        {!loaded ? (
+          <Text style={styles.footerNote}>Loading your profile…</Text>
+        ) : (
+          <Text style={styles.footerNote}>Profile preferences are stored locally on this device.</Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -64,7 +119,7 @@ function StatItem({ icon: Icon, value, label, bg, color }: any) {
   return (
     <View style={styles.statItem}>
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
-        <Icon width={22} height={22} stroke={color} />
+        <Icon width={20} height={20} stroke={color} />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -72,14 +127,22 @@ function StatItem({ icon: Icon, value, label, bg, color }: any) {
   );
 }
 
-function SettingsRow({ icon: Icon, label, onPress }: any) {
+function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [styles.settingsItem, pressed && { opacity: 0.7 }]} onPress={onPress}>
+    <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SettingsRow({ icon: Icon, label, onPress, danger }: any) {
+  return (
+    <Pressable style={({ pressed }) => [styles.settingsItem, pressed && { opacity: 0.75 }]} onPress={onPress}>
       <View style={styles.settingsLeft}>
-        <Icon width={20} height={20} stroke={colors.textMuted} />
-        <Text style={styles.settingsText}>{label}</Text>
+        <Icon width={20} height={20} stroke={danger ? colors.error : colors.textMuted} />
+        <Text style={[styles.settingsText, danger && { color: colors.error }]}>{label}</Text>
       </View>
-      <Text style={{ color: colors.textMuted, fontSize: 18 }}>›</Text>
+      <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
@@ -87,20 +150,20 @@ function SettingsRow({ icon: Icon, label, onPress }: any) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   scroll: {
     paddingBottom: spacing.xxxl,
   },
   header: {
     paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxl + 10,
+    paddingBottom: spacing.xxl + 12,
     alignItems: 'center',
   },
   avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -113,42 +176,51 @@ const styles = StyleSheet.create({
   },
   email: {
     ...typography.caption,
-    color: '#fbcfe8',
+    color: '#ffe5ef',
     marginTop: spacing.xs,
   },
   statsWrapper: {
-    marginTop: -20,
+    marginTop: -24,
     paddingHorizontal: spacing.lg,
   },
   statsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
     padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
     ...shadows.md,
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: spacing.md,
   },
   statItem: {
+    flex: 1,
     alignItems: 'center',
   },
   statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   statValue: {
-    ...typography.h2,
+    ...typography.h3,
     color: colors.text,
   },
   statLabel: {
     ...typography.small,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  statsCaption: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -159,20 +231,60 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  settingsBox: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+  card: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    ...shadows.sm,
+  },
+  fieldLabel: {
+    ...typography.smallBold,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  input: {
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.text,
+    ...typography.body,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.accentLight,
+    borderColor: colors.accent,
+  },
+  chipText: {
+    ...typography.small,
+    color: colors.text,
+  },
+  chipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
   settingsItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
   },
   settingsLeft: {
     flexDirection: 'row',
@@ -182,5 +294,16 @@ const styles = StyleSheet.create({
   settingsText: {
     ...typography.caption,
     color: colors.text,
+  },
+  chevron: {
+    fontSize: 20,
+    color: colors.textMuted,
+  },
+  footerNote: {
+    ...typography.small,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
   },
 });

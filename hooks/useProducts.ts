@@ -72,6 +72,7 @@ export function useSearch() {
     if (!query.trim()) {
       setResults([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
@@ -86,7 +87,7 @@ export function useSearch() {
       } finally {
         setLoading(false);
       }
-    }, 400);
+    }, 150);
   }, []);
 
   return { results, loading, error, search };

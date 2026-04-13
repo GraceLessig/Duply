@@ -34,7 +34,12 @@ export default function CategoriesScreen() {
               <Animated.View key={cat.id} entering={FadeInDown.delay(i * 100).duration(400)}>
                 <Pressable
                   style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                  onPress={() => router.push({ pathname: '/searchResults', params: { q: cat.productType } })}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/categoryProducts',
+                      params: { category: cat.productType, title: cat.name },
+                    })
+                  }
                 >
                   <LinearGradient
                     colors={[cat.color, `${cat.color}88`]}
@@ -45,7 +50,7 @@ export default function CategoriesScreen() {
                     <Text style={styles.emoji}>{cat.emoji}</Text>
                     <View>
                       <Text style={styles.cardText}>{cat.name}</Text>
-                      <Text style={styles.cardSubtext}>Browse {cat.name.toLowerCase()} dupes</Text>
+                      <Text style={styles.cardSubtext}>Browse {cat.name.toLowerCase()} products from your catalog</Text>
                     </View>
                   </LinearGradient>
                 </Pressable>
@@ -69,7 +74,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -90,7 +95,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     ...shadows.md,
   },
@@ -99,15 +104,15 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   cardGradient: {
-    height: 110,
-    borderRadius: radius.lg,
+    height: 124,
+    borderRadius: radius.xl,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.lg,
     paddingHorizontal: spacing.xl,
   },
   emoji: {
-    fontSize: 40,
+    fontSize: 42,
   },
   cardText: {
     ...typography.h2,
@@ -115,7 +120,8 @@ const styles = StyleSheet.create({
   },
   cardSubtext: {
     ...typography.caption,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.88)',
+    marginTop: 4,
+    maxWidth: 220,
   },
 });

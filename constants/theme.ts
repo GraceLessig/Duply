@@ -4,18 +4,18 @@ export const colors = {
   primary: '#820933',
   primaryLight: '#a8123f',
   accent: '#ff99a0',
-  accentLight: '#ffcdd2',
+  accentLight: '#ffe1e4',
   accentDark: '#e57373',
 
-  gradientStart: '#ffebee',
-  gradientMid: '#fce4ec',
-  gradientEnd: '#f8bbd0',
+  gradientStart: '#fff8fb',
+  gradientMid: '#ffe7ef',
+  gradientEnd: '#ffd2df',
 
-  background: '#fafafa',
+  background: '#fffaf7',
   surface: '#ffffff',
-  surfaceElevated: '#ffffff',
+  surfaceElevated: '#fffdfc',
 
-  text: '#1a1a2e',
+  text: '#2a1830',
   textSecondary: '#6b7280',
   textMuted: '#9ca3af',
   textOnPrimary: '#ffffff',
@@ -26,27 +26,27 @@ export const colors = {
   warning: '#f59e0b',
   error: '#ef4444',
 
-  border: '#f3f4f6',
+  border: '#f7d9e3',
   borderAccent: '#ff99a0',
-  divider: '#e5e7eb',
+  divider: '#f4dde6',
 
   overlay: 'rgba(0,0,0,0.3)',
-  cardShadow: 'rgba(130, 9, 51, 0.08)',
+  cardShadow: 'rgba(130, 9, 51, 0.12)',
 
   tabInactive: '#9ca3af',
   tabActive: '#820933',
-  tabActiveBg: '#fce4ec',
+  tabActiveBg: '#ffe4eb',
 
-  skeleton: '#f3f4f6',
-  skeletonHighlight: '#e5e7eb',
+  skeleton: '#f8e9ee',
+  skeletonHighlight: '#f3d9e2',
 } as const;
 
 export const gradients = {
   main: [colors.gradientStart, colors.gradientMid, colors.gradientEnd] as const,
-  hero: ['#fce4ec', '#f8bbd0', '#f48fb1'] as const,
+  hero: ['#ffdce8', '#ffb9cf', '#ff8fb2'] as const,
   header: ['#ec4899', '#a855f7'] as const,
-  card: ['#ffffff', '#fef7f8'] as const,
-  matchScore: ['#d946ef', '#a855f7'] as const,
+  card: ['#ffffff', '#fff5f8'] as const,
+  matchScore: ['#fff1a6', '#f59e0b'] as const,
 } as const;
 
 export const spacing = {
@@ -55,23 +55,23 @@ export const spacing = {
   md: 12,
   lg: 16,
   xl: 24,
-  xxl: 32,
-  xxxl: 48,
+  xxl: 34,
+  xxxl: 52,
 } as const;
 
 export const radius = {
   sm: 8,
   md: 12,
-  lg: 16,
-  xl: 24,
+  lg: 18,
+  xl: 28,
   full: 999,
 } as const;
 
 export const typography = {
   hero: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800' as const,
-    letterSpacing: -0.5,
+    letterSpacing: -0.9,
   },
   h1: {
     fontSize: 28,
@@ -79,11 +79,11 @@ export const typography = {
     letterSpacing: -0.3,
   },
   h2: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700' as const,
   },
   h3: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '600' as const,
   },
   body: {
@@ -108,7 +108,7 @@ export const typography = {
   },
   smallBold: {
     fontSize: 12,
-    fontWeight: '600' as const,
+    fontWeight: '700' as const,
   },
   label: {
     fontSize: 11,
@@ -122,9 +122,9 @@ export const shadows = {
   sm: Platform.select({
     ios: {
       shadowColor: colors.cardShadow,
-      shadowOffset: { width: 0, height: 1 },
+      shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 1,
-      shadowRadius: 3,
+      shadowRadius: 8,
     },
     android: { elevation: 2 },
     default: {},
@@ -132,21 +132,21 @@ export const shadows = {
   md: Platform.select({
     ios: {
       shadowColor: colors.cardShadow,
-      shadowOffset: { width: 0, height: 4 },
+      shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 1,
-      shadowRadius: 8,
+      shadowRadius: 18,
     },
-    android: { elevation: 4 },
+    android: { elevation: 6 },
     default: {},
   }),
   lg: Platform.select({
     ios: {
       shadowColor: colors.cardShadow,
-      shadowOffset: { width: 0, height: 8 },
+      shadowOffset: { width: 0, height: 14 },
       shadowOpacity: 1,
-      shadowRadius: 16,
+      shadowRadius: 28,
     },
-    android: { elevation: 8 },
+    android: { elevation: 10 },
     default: {},
   }),
 } as const;

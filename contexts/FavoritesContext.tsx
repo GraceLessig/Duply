@@ -5,6 +5,9 @@ const STORAGE_KEY = '@duply_favorites';
 
 export interface FavoriteItem {
   id: string;
+  kind?: 'product' | 'comparison';
+  originalId?: string;
+  dupeProductId?: string;
   originalName: string;
   originalBrand: string;
   originalPrice: number;
@@ -14,6 +17,7 @@ export interface FavoriteItem {
   dupePrice: number;
   dupeImage: string;
   similarity: number;
+  matchReason?: string;
   savings: number;
   savedAt: number;
 }
@@ -23,6 +27,7 @@ export interface FavoritesContextValue {
   loaded: boolean;
   addFavorite: (item: Omit<FavoriteItem, 'savedAt'>) => void;
   removeFavorite: (id: string) => void;
+  clearFavorites: () => void;
   isFavorite: (id: string) => boolean;
   toggleFavorite: (item: Omit<FavoriteItem, 'savedAt'>) => void;
 }
@@ -32,6 +37,7 @@ export const FavoritesContext = createContext<FavoritesContextValue>({
   loaded: false,
   addFavorite: () => {},
   removeFavorite: () => {},
+  clearFavorites: () => {},
   isFavorite: () => false,
   toggleFavorite: () => {},
 });
@@ -44,7 +50,13 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const json = await AsyncStorage.getItem(STORAGE_KEY);
-        if (json) setFavorites(JSON.parse(json));
+        if (json) {
+          const parsed = JSON.parse(json) as FavoriteItem[];
+          setFavorites(parsed.map(item => ({
+            kind: item.kind || (item.dupeProductId ? 'comparison' : 'product'),
+            ...item,
+          })));
+        }
       } catch {
         // Storage unavailable
       } finally {
@@ -78,6 +90,13 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persist]);
 
+  const clearFavorites = useCallback(() => {
+    setFavorites(() => {
+      persist([]);
+      return [];
+    });
+  }, [persist]);
+
   const isFavorite = useCallback((id: string) => {
     return favorites.some(f => f.id === id);
   }, [favorites]);
@@ -92,7 +111,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <FavoritesContext.Provider
-      value={{ favorites, loaded, addFavorite, removeFavorite, isFavorite, toggleFavorite }}
+      value={{ favorites, loaded, addFavorite, removeFavorite, clearFavorites, isFavorite, toggleFavorite }}
     >
       {children}
     </FavoritesContext.Provider>

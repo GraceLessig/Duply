@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+faiss-cpu
+numpy
+sentence-transformers
+torch
+pydantic
+pandas
+kagglehub
+firebase-admin

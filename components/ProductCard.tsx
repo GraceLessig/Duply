@@ -27,13 +27,19 @@ export default function ProductCard({
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Image
-        source={{ uri: image }}
-        style={styles.image}
-        contentFit="cover"
-        placeholder={{ blurhash: 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH' }}
-        transition={300}
-      />
+      {image ? (
+        <Image
+          source={{ uri: image }}
+          style={styles.image}
+          contentFit="cover"
+          placeholder={{ blurhash: 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH' }}
+          transition={300}
+        />
+      ) : (
+        <View style={[styles.image, styles.imagePlaceholder]}>
+          <Text style={styles.placeholderText}>No image</Text>
+        </View>
+      )}
       <View style={styles.info}>
         <Text style={styles.brand}>{brand}</Text>
         <Text style={styles.name} numberOfLines={2}>{name}</Text>
@@ -58,55 +64,73 @@ export default function ProductCard({
 const styles = StyleSheet.create({
   card: {
     width: 170,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
+    overflow: 'visible',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
     ...shadows.md,
   },
   pressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.97 }],
+    opacity: 0.94,
+    transform: [{ scale: 0.98 }, { translateY: -2 }],
   },
   image: {
     width: '100%',
-    height: 120,
+    height: 128,
     backgroundColor: colors.skeleton,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    ...typography.small,
+    color: colors.textMuted,
   },
   info: {
     padding: spacing.md,
   },
   brand: {
     ...typography.small,
-    color: colors.textMuted,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   name: {
     ...typography.captionBold,
     color: colors.text,
-    marginTop: 2,
-    minHeight: 36,
+    marginTop: 4,
+    minHeight: 40,
   },
   bottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   matchBadge: {
-    backgroundColor: colors.accentLight,
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff3a8',
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
+    marginBottom: spacing.sm,
   },
   matchText: {
     ...typography.smallBold,
-    color: colors.primary,
+    color: '#8a4b00',
   },
   priceRow: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   price: {
-    ...typography.captionBold,
-    color: colors.success,
+    ...typography.bodyBold,
+    color: colors.primary,
   },
   origPrice: {
     ...typography.small,

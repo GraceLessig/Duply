@@ -8,12 +8,14 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, gradients, radius, shadows, spacing, typography } from '../constants/theme';
+import { useActivity } from '../hooks/useActivity';
 import { useFavorites } from '../hooks/useFavorites';
 import type { Product } from '../services/api';
 import { dataService } from '../services/api';
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
+  const { addRecentView } = useActivity();
   const { isFavorite: checkFavorite, toggleFavorite } = useFavorites();
   const params = useLocalSearchParams<{
     id?: string;
@@ -21,6 +23,7 @@ export default function ProductDetailsScreen() {
     originalId?: string;
     dupeProductId?: string;
     similarity?: string;
+    matchReason?: string;
     savings?: string;
     fromFeatured?: string;
   }>();
@@ -29,7 +32,9 @@ export default function ProductDetailsScreen() {
   const [dupeProduct, setDupeProduct] = useState<Product | null>(null);
   const [similarity, setSimilarity] = useState(0);
   const [savingsAmount, setSavingsAmount] = useState(0);
+  const [matchReason, setMatchReason] = useState('');
   const [loading, setLoading] = useState(true);
+  const isComparisonView = Boolean((params.fromFeatured && params.id) || (params.originalId && params.dupeProductId));
 
   useEffect(() => {
     loadData();
@@ -38,7 +43,18 @@ export default function ProductDetailsScreen() {
   async function loadData() {
     setLoading(true);
     try {
-      if (params.originalId && params.dupeProductId) {
+      if (params.fromFeatured && params.id) {
+        const featuredDupes = await dataService.getFeaturedDupes();
+        const featuredMatch = featuredDupes.find(item => item.id === params.id);
+
+        if (featuredMatch) {
+          setOriginal(featuredMatch.original);
+          setDupeProduct(featuredMatch.dupe);
+          setSimilarity(featuredMatch.similarity);
+          setSavingsAmount(featuredMatch.savings);
+          setMatchReason(featuredMatch.matchReason || '');
+        }
+      } else if (params.originalId && params.dupeProductId) {
         const [orig, dupe] = await Promise.all([
           dataService.getProductById(params.originalId),
           dataService.getProductById(params.dupeProductId),
@@ -47,16 +63,16 @@ export default function ProductDetailsScreen() {
         setDupeProduct(dupe);
         setSimilarity(Number(params.similarity) || 0);
         setSavingsAmount(Number(params.savings) || 0);
+        setMatchReason(params.matchReason || '');
       } else if (params.id) {
         const product = await dataService.getProductById(params.id);
         if (product) {
           setOriginal(product);
-          const dupes = await dataService.findDupes(product);
-          if (dupes.length > 0) {
-            setDupeProduct(dupes[0].dupe);
-            setSimilarity(dupes[0].similarity);
-            setSavingsAmount(dupes[0].savings);
-          }
+          addRecentView(product);
+          setDupeProduct(null);
+          setSimilarity(0);
+          setSavingsAmount(0);
+          setMatchReason('');
         }
       }
     } catch {
@@ -105,6 +121,9 @@ export default function ProductDetailsScreen() {
     if (!original) return;
     toggleFavorite({
       id: favoriteId,
+      kind: isComparisonView ? 'comparison' : 'product',
+      originalId: original.id,
+      dupeProductId: dupeProduct?.id,
       originalName: original.name,
       originalBrand: original.brand,
       originalPrice: original.price,
@@ -114,13 +133,42 @@ export default function ProductDetailsScreen() {
       dupePrice: dupeProduct?.price || original.price,
       dupeImage: dupeProduct?.image || original.image,
       similarity,
+      matchReason,
       savings: savingsAmount,
+    });
+  };
+
+  const openProductPage = (product: Product | null) => {
+    if (!product?.id) return;
+
+    router.push({
+      pathname: '/productDetails',
+      params: {
+        id: product.id,
+        productName: product.name,
+      },
     });
   };
 
   const savingsPercent = original.price > 0
     ? Math.round((savingsAmount / original.price) * 100)
     : 0;
+  const matchReasonParts = matchReason
+    ? matchReason.split(',').map(part => part.trim()).filter(Boolean)
+    : [];
+  const productFacts = [
+    { label: 'Category', value: original.category },
+    { label: 'Product Type', value: original.productType },
+    { label: 'Main Ingredient', value: original.mainIngredient },
+    { label: 'Skin Type', value: original.skinType },
+    { label: 'Packaging', value: original.packagingType },
+    { label: 'Size', value: original.productSize },
+    { label: 'Country', value: original.countryOfOrigin },
+    { label: 'Gender Target', value: original.genderTarget },
+    { label: 'Cruelty Free', value: original.crueltyFree },
+    { label: 'Reviews', value: original.numberOfReviews ? String(original.numberOfReviews) : '' },
+  ].filter(item => item.value);
+  const displayRating = isComparisonView ? (dupeProduct?.rating || original.rating) : original.rating;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -128,7 +176,7 @@ export default function ProductDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Product Details</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{original.name}</Text>
         <TouchableOpacity onPress={handleToggleFavorite} style={styles.headerBtn}>
           <Ionicons
             name={isFav ? 'heart' : 'heart-outline'}
@@ -139,14 +187,23 @@ export default function ProductDetailsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInDown.duration(500)}>
-          <LinearGradient colors={[...gradients.matchScore]} style={styles.matchBanner}>
-            <Text style={styles.matchNumber}>{similarity}%</Text>
-            <Text style={styles.matchLabel}>Match Score</Text>
-          </LinearGradient>
-        </Animated.View>
+        {isComparisonView ? (
+          <Animated.View entering={FadeInDown.duration(500)}>
+            <LinearGradient colors={[...gradients.matchScore]} style={styles.matchBanner}>
+              <Text style={styles.matchNumber}>{similarity}%</Text>
+              <Text style={styles.matchLabel}>Match Score</Text>
+            </LinearGradient>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeInDown.duration(500)} style={styles.productHero}>
+            <Image source={{ uri: original.image }} style={styles.heroImage} contentFit="cover" />
+            <Text style={styles.heroBrand}>{original.brand}</Text>
+            <Text style={styles.heroName}>{original.name}</Text>
+            <Text style={styles.heroPrice}>${original.price.toFixed(2)}</Text>
+          </Animated.View>
+        )}
 
-        {savingsAmount > 0 && (
+        {isComparisonView && savingsAmount > 0 && (
           <Animated.View entering={FadeInDown.delay(100).duration(400)}>
             <View style={styles.savingsRow}>
               <View style={styles.savingsBadge}>
@@ -160,38 +217,61 @@ export default function ProductDetailsScreen() {
           </Animated.View>
         )}
 
-        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-          <Text style={styles.sectionTitle}>Product Comparison</Text>
-          <View style={styles.comparisonRow}>
-            <View style={styles.productCard}>
-              <Image source={{ uri: original.image }} style={styles.productImage} contentFit="cover" />
-              <View style={[styles.labelBadge, { backgroundColor: '#fce4ec' }]}>
-                <Text style={[styles.labelText, { color: colors.primary }]}>ORIGINAL</Text>
-              </View>
-              <Text style={styles.productBrand}>{original.brand}</Text>
-              <Text style={styles.productName} numberOfLines={2}>{original.name}</Text>
-              <Text style={[styles.productPrice, { color: colors.primary }]}>${original.price.toFixed(2)}</Text>
-            </View>
-
-            <View style={styles.vsCircle}>
-              <Text style={styles.vsText}>VS</Text>
-            </View>
-
-            {dupeProduct && (
-              <View style={styles.productCard}>
-                <Image source={{ uri: dupeProduct.image }} style={styles.productImage} contentFit="cover" />
-                <View style={[styles.labelBadge, { backgroundColor: colors.successLight }]}>
-                  <Text style={[styles.labelText, { color: colors.success }]}>DUPE</Text>
+        {isComparisonView && (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <Text style={styles.sectionTitle}>Product Comparison</Text>
+            <View style={styles.comparisonRow}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.productCard}
+                onPress={() => openProductPage(original)}
+              >
+                <Image source={{ uri: original.image }} style={styles.productImage} contentFit="cover" />
+                <View style={[styles.labelBadge, { backgroundColor: '#fce4ec' }]}>
+                  <Text style={[styles.labelText, { color: colors.primary }]}>ORIGINAL</Text>
                 </View>
-                <Text style={styles.productBrand}>{dupeProduct.brand}</Text>
-                <Text style={styles.productName} numberOfLines={2}>{dupeProduct.name}</Text>
-                <Text style={[styles.productPrice, { color: colors.success }]}>${dupeProduct.price.toFixed(2)}</Text>
-              </View>
-            )}
-          </View>
-        </Animated.View>
+                <Text style={styles.productBrand}>{original.brand}</Text>
+                <Text style={styles.productName} numberOfLines={2}>{original.name}</Text>
+                <Text style={[styles.productPrice, { color: colors.primary }]}>${original.price.toFixed(2)}</Text>
+                <Text style={styles.productLinkHint}>Tap to open product page</Text>
+              </TouchableOpacity>
 
-        {dupeProduct?.colors && dupeProduct.colors.length > 0 && (
+              <View style={styles.vsCircle}>
+                <Text style={styles.vsText}>VS</Text>
+              </View>
+
+              {dupeProduct && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.productCard}
+                  onPress={() => openProductPage(dupeProduct)}
+                >
+                  <Image source={{ uri: dupeProduct.image }} style={styles.productImage} contentFit="cover" />
+                  <View style={[styles.labelBadge, { backgroundColor: colors.successLight }]}>
+                    <Text style={[styles.labelText, { color: colors.success }]}>DUPE</Text>
+                  </View>
+                  <Text style={styles.productBrand}>{dupeProduct.brand}</Text>
+                  <Text style={styles.productName} numberOfLines={2}>{dupeProduct.name}</Text>
+                  <Text style={[styles.productPrice, { color: colors.success }]}>${dupeProduct.price.toFixed(2)}</Text>
+                  <Text style={styles.productLinkHint}>Tap to open product page</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
+        {!isComparisonView && original.colors && original.colors.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <Text style={styles.sectionTitle}>Available Shades</Text>
+            <View style={styles.shadesRow}>
+              {original.colors.map((c, i) => (
+                <View key={i} style={[styles.shade, { backgroundColor: c.hex }]} />
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
+        {isComparisonView && dupeProduct?.colors && dupeProduct.colors.length > 0 && (
           <Animated.View entering={FadeInDown.delay(300).duration(400)}>
             <Text style={styles.sectionTitle}>Available Shades</Text>
             <View style={styles.shadesRow}>
@@ -208,33 +288,44 @@ export default function ProductDetailsScreen() {
             {[1, 2, 3, 4, 5].map(star => (
               <Ionicons
                 key={star}
-                name={star <= Math.round(dupeProduct?.rating || original.rating) ? 'star' : 'star-outline'}
+                name={star <= Math.round(displayRating) ? 'star' : 'star-outline'}
                 size={22}
                 color="#f59e0b"
               />
             ))}
-            <Text style={styles.ratingValue}>{(dupeProduct?.rating || original.rating).toFixed(1)}</Text>
+            <Text style={styles.ratingValue}>{displayRating.toFixed(1)}</Text>
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(400).duration(400)}>
-          <Text style={styles.sectionTitle}>Why This Match?</Text>
-          <View style={styles.reasonsBox}>
-            {[
-              'Similar formula and finish',
-              'Comparable color payoff and pigmentation',
-              'Similar wear time and longevity',
-              'Comparable application and texture',
-            ].map((reason, i) => (
-              <View key={i} style={styles.reasonRow}>
-                <View style={styles.checkCircle}>
-                  <Feather name="check" size={14} color={colors.success} />
+        {productFacts.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(375).duration(400)}>
+            <Text style={styles.sectionTitle}>Product Info</Text>
+            <View style={styles.factsBox}>
+              {productFacts.map(item => (
+                <View key={item.label} style={styles.factRow}>
+                  <Text style={styles.factLabel}>{item.label}</Text>
+                  <Text style={styles.factValue}>{item.value}</Text>
                 </View>
-                <Text style={styles.reasonText}>{reason}</Text>
-              </View>
-            ))}
-          </View>
-        </Animated.View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
+        {isComparisonView && (
+          <Animated.View entering={FadeInUp.delay(400).duration(400)}>
+            <Text style={styles.sectionTitle}>Why This Match?</Text>
+            <View style={styles.reasonsBox}>
+              {(matchReasonParts.length > 0 ? matchReasonParts : ['Matched on closest overall product attributes']).map((reason, i) => (
+                <View key={i} style={styles.reasonRow}>
+                  <View style={styles.checkCircle}>
+                    <Feather name="check" size={14} color={colors.success} />
+                  </View>
+                  <Text style={styles.reasonText}>{reason}</Text>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         <View style={{ height: spacing.xxxl + spacing.xl }} />
       </ScrollView>
@@ -273,7 +364,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -284,6 +375,36 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.bodyBold,
     color: colors.primary,
+  },
+  productHero: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+  },
+  heroImage: {
+    width: 230,
+    height: 230,
+    borderRadius: 36,
+    backgroundColor: colors.skeleton,
+    ...shadows.md,
+  },
+  heroBrand: {
+    ...typography.small,
+    color: colors.primary,
+    marginTop: spacing.lg,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  heroName: {
+    ...typography.h3,
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  heroPrice: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    marginTop: spacing.sm,
   },
   matchBanner: {
     paddingVertical: spacing.xl + spacing.sm,
@@ -372,6 +493,11 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     marginTop: spacing.xs,
   },
+  productLinkHint: {
+    ...typography.small,
+    color: colors.accent,
+    marginTop: spacing.sm,
+  },
   vsCircle: {
     width: 36,
     height: 36,
@@ -416,6 +542,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f0ff',
     borderRadius: radius.lg,
     gap: spacing.md,
+  },
+  factsBox: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    ...shadows.sm,
+    gap: spacing.md,
+  },
+  factRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  factLabel: {
+    ...typography.small,
+    color: colors.textMuted,
+    flex: 1,
+  },
+  factValue: {
+    ...typography.captionBold,
+    color: colors.text,
+    flex: 1,
+    textAlign: 'right',
   },
   reasonRow: {
     flexDirection: 'row',

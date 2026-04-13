@@ -1,0 +1,260 @@
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Search } from 'react-native-feather';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ProductCardSkeleton } from '../components/SkeletonLoader';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
+import { useProductsByCategory } from '../hooks/useProducts';
+
+export default function CategoryProductsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; title?: string }>();
+  const category = params.category || '';
+  const title = params.title || 'Category';
+  const [query, setQuery] = useState('');
+  const { data: products, loading, error } = useProductsByCategory(category);
+
+  const filteredProducts = useMemo(() => {
+    const items = products || [];
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return items;
+    }
+
+    return items.filter(product => {
+      const brand = product.brand.toLowerCase();
+      const name = product.name.toLowerCase();
+      const productType = product.productType.toLowerCase();
+      return (
+        brand.includes(normalizedQuery) ||
+        name.includes(normalizedQuery) ||
+        productType.includes(normalizedQuery)
+      );
+    });
+  }, [products, query]);
+
+  const openProduct = (id: string, name: string) => {
+    router.push({
+      pathname: '/productDetails',
+      params: { id, productName: name },
+    });
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <ArrowLeft width={24} height={24} stroke={colors.primary} />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.title}>{title}</Text>
+          {!loading && !error ? (
+            <Text style={styles.subtitle}>{filteredProducts.length} products</Text>
+          ) : null}
+        </View>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.searchWrap}>
+        <Search width={18} height={18} stroke={colors.accent} style={styles.searchIcon} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={`Search ${title.toLowerCase()} products...`}
+          placeholderTextColor={colors.textMuted}
+          style={styles.searchInput}
+        />
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          {[1, 2, 3, 4].map(i => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </View>
+      ) : error ? (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>Couldn’t load products</Text>
+          <Text style={styles.stateSubtitle}>{error}</Text>
+        </View>
+      ) : filteredProducts.length === 0 ? (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>No products found</Text>
+          <Text style={styles.stateSubtitle}>Try a different search inside this category</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredProducts}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              onPress={() => openProduct(item.id, item.name)}
+            >
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
+              ) : (
+                <View style={[styles.image, styles.imagePlaceholder]}>
+                  <Text style={styles.placeholderEmoji}>💄</Text>
+                </View>
+              )}
+              <View style={styles.info}>
+                <Text style={styles.brand}>{item.brand}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.type}>{item.productType}</Text>
+                  <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: {
+    padding: spacing.sm,
+    borderRadius: radius.md,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  title: {
+    ...typography.h3,
+    color: colors.primary,
+  },
+  subtitle: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  searchWrap: {
+    margin: spacing.lg,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: spacing.md,
+    zIndex: 1,
+  },
+  searchInput: {
+    paddingVertical: spacing.lg,
+    paddingLeft: 40,
+    paddingRight: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.accentLight,
+    borderRadius: radius.full,
+    color: colors.primary,
+    ...typography.body,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  loadingWrap: {
+    paddingHorizontal: spacing.lg,
+  },
+  list: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    ...shadows.sm,
+  },
+  cardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  image: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.lg,
+    backgroundColor: colors.skeleton,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gradientStart,
+  },
+  placeholderEmoji: {
+    fontSize: 28,
+  },
+  info: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  brand: {
+    ...typography.small,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  name: {
+    ...typography.captionBold,
+    color: colors.text,
+    marginTop: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    gap: spacing.md,
+  },
+  type: {
+    ...typography.small,
+    color: colors.accentDark,
+    textTransform: 'capitalize',
+    flex: 1,
+  },
+  price: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  stateTitle: {
+    ...typography.captionBold,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+});

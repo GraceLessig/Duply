@@ -36,7 +36,7 @@ export default function MatchBadge({ percent, size = 'sm', animate = false }: Ma
       <Text style={[styles.percent, isLg && styles.percentLg]}>
         {percent}%
       </Text>
-      {isLg && <Text style={styles.label}>match</Text>}
+      {isLg && <Text style={styles.label}>match score</Text>}
     </Animated.View>
   );
 }
