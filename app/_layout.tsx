@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import AppInstallPrompt from '../components/AppInstallPrompt';
 import { ActivityProvider } from '../contexts/ActivityContext';
 import { FavoritesProvider } from '../contexts/FavoritesContext';
 import { ProfileProvider } from '../contexts/ProfileContext';
@@ -27,6 +28,7 @@ export default function RootLayout() {
             <Stack.Screen name="settings" />
             <Stack.Screen name="about" />
           </Stack>
+          <AppInstallPrompt />
         </FavoritesProvider>
       </ActivityProvider>
     </ProfileProvider>

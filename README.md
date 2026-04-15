@@ -20,7 +20,7 @@ The app uses:
 ### 1. Clone
 
 ```bash
-git clone https://github.com/GraceLessig/Duply.git
+git clone https://github.com/katgorman/Duply.git
 cd Duply
 ```
 
@@ -114,6 +114,12 @@ For hosted builds, set:
 EXPO_PUBLIC_API_BASE_URL=https://your-backend-host.example.com
 ```
 
+To surface an Android install button inside the web app, also set:
+
+```text
+EXPO_PUBLIC_ANDROID_APP_URL=https://expo.dev/artifacts/eas/your-android-build-link
+```
+
 You can place that in a local `.env` file for development, or in Expo EAS environment variables for cloud builds.
 
 ### Hosted Backend Secrets
@@ -143,9 +149,11 @@ For the short-term sharing flow, use the `preview` profile.
 
 1. Deploy the FastAPI backend to a host that stays online all the time.
 2. Add the Firebase admin credentials only to that backend host.
-3. Set `EXPO_PUBLIC_API_BASE_URL` in your Expo `preview` environment.
-4. Build the app with EAS internal distribution.
-5. Share the generated install link / QR code with testers.
+3. Build the Android app with EAS internal distribution.
+4. Copy the final Android build URL from Expo.
+5. Set `EXPO_PUBLIC_API_BASE_URL` and `EXPO_PUBLIC_ANDROID_APP_URL` for your web build.
+6. Export and host the web app publicly.
+7. Put the public web URL into the flyer QR code.
 
 ### Example Backend Start Command
 

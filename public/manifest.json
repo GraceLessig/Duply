@@ -1,0 +1,21 @@
+{
+  "name": "Duply",
+  "short_name": "Duply",
+  "description": "Find beauty dupes, compare match percentages, and save your favorite alternatives.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffaf7",
+  "theme_color": "#820933",
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/images/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ module.exports = ({ config }) => {
     extra: {
       ...extra,
       apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || extra.apiBaseUrl || '',
+      androidAppUrl: process.env.EXPO_PUBLIC_ANDROID_APP_URL || extra.androidAppUrl || '',
       eas: {
         ...(extra.eas || {}),
         ...(projectId ? { projectId } : {}),

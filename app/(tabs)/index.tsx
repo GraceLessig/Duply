@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Menu, Search, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ export default function HomeScreen() {
   const { results, loading: searchLoading, error: searchError, search } = useSearch();
   const { recentViews, loaded: activityLoaded, addRecentSearch } = useActivity();
   const showingSuggestions = query.trim().length > 0;
+  const androidAppUrl = ((Constants.expoConfig as any)?.extra?.androidAppUrl || '').trim();
 
   const openProduct = (id: string, name: string) => {
     addRecentSearch(query);
@@ -121,6 +123,23 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
         </LinearGradient>
+
+        {Platform.OS === 'web' ? (
+          <Animated.View entering={FadeInDown.delay(460).duration(500)} style={styles.section}>
+            <View style={styles.installCard}>
+              <Text style={styles.installTitle}>On iPhone, add Duply to your home screen</Text>
+              <Text style={styles.installBody}>
+                Open this page in Safari, tap Share, then choose Add to Home Screen. Android users can use the browser
+                version too, or install the full app if you share an Android build link.
+              </Text>
+              {androidAppUrl ? (
+                <Pressable onPress={() => Linking.openURL(androidAppUrl)} style={styles.installButton}>
+                  <Text style={styles.installButtonText}>Install Android App</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -383,6 +402,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   emptyActivityButtonText: {
+    ...typography.captionBold,
+    color: colors.textOnPrimary,
+  },
+  installCard: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    ...shadows.sm,
+  },
+  installTitle: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  installBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    lineHeight: 20,
+  },
+  installButton: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  installButtonText: {
     ...typography.captionBold,
     color: colors.textOnPrimary,
   },
