@@ -32,7 +32,14 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Learn more about duply"
+          onPress={() => router.push('/about')}
+          style={({ pressed }) => pressed && styles.brandLogoPressed}
+        >
+          <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
+        </Pressable>
         <Text style={styles.brand}>düply</Text>
         <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
           <Menu width={24} height={24} stroke={colors.primary} />
@@ -238,6 +245,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
     backgroundColor: colors.surface,
+  },
+  brandLogoPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
   },
   brand: {
     ...typography.hero,
