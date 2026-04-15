@@ -2,7 +2,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,18 +34,23 @@ export default function ProductDetailsScreen() {
   const [savingsAmount, setSavingsAmount] = useState(0);
   const [matchReason, setMatchReason] = useState('');
   const [loading, setLoading] = useState(true);
-  const isComparisonView = Boolean((params.fromFeatured && params.id) || (params.originalId && params.dupeProductId));
+  const {
+    fromFeatured,
+    id,
+    originalId,
+    dupeProductId,
+    similarity: similarityParam,
+    matchReason: matchReasonParam,
+    savings: savingsParam,
+  } = params;
+  const isComparisonView = Boolean((fromFeatured && id) || (originalId && dupeProductId));
 
-  useEffect(() => {
-    loadData();
-  }, [params.originalId, params.dupeProductId, params.id]);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (params.fromFeatured && params.id) {
+      if (fromFeatured && id) {
         const featuredDupes = await dataService.getFeaturedDupes();
-        const featuredMatch = featuredDupes.find(item => item.id === params.id);
+        const featuredMatch = featuredDupes.find(item => item.id === id);
 
         if (featuredMatch) {
           setOriginal(featuredMatch.original);
@@ -54,18 +59,18 @@ export default function ProductDetailsScreen() {
           setSavingsAmount(featuredMatch.savings);
           setMatchReason(featuredMatch.matchReason || '');
         }
-      } else if (params.originalId && params.dupeProductId) {
+      } else if (originalId && dupeProductId) {
         const [orig, dupe] = await Promise.all([
-          dataService.getProductById(params.originalId),
-          dataService.getProductById(params.dupeProductId),
+          dataService.getProductById(originalId),
+          dataService.getProductById(dupeProductId),
         ]);
         setOriginal(orig);
         setDupeProduct(dupe);
-        setSimilarity(Number(params.similarity) || 0);
-        setSavingsAmount(Number(params.savings) || 0);
-        setMatchReason(params.matchReason || '');
-      } else if (params.id) {
-        const product = await dataService.getProductById(params.id);
+        setSimilarity(Number(similarityParam) || 0);
+        setSavingsAmount(Number(savingsParam) || 0);
+        setMatchReason(matchReasonParam || '');
+      } else if (id) {
+        const product = await dataService.getProductById(id);
         if (product) {
           setOriginal(product);
           addRecentView(product);
@@ -80,7 +85,11 @@ export default function ProductDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [addRecentView, dupeProductId, fromFeatured, id, matchReasonParam, originalId, savingsParam, similarityParam]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -114,7 +123,7 @@ export default function ProductDetailsScreen() {
     );
   }
 
-  const favoriteId = params.dupeId || params.id || '';
+  const favoriteId = params.dupeId || id || '';
   const isFav = checkFavorite(favoriteId);
 
   const handleToggleFavorite = () => {
@@ -190,7 +199,14 @@ export default function ProductDetailsScreen() {
         {isComparisonView ? (
           <Animated.View entering={FadeInDown.duration(500)}>
             <LinearGradient colors={[...gradients.matchScore]} style={styles.matchBanner}>
-              <Text style={styles.matchNumber}>{similarity}%</Text>
+              <View style={styles.matchPill}>
+                <Feather name="check-circle" size={15} color={colors.primary} />
+                <Text style={styles.matchPillText}>Dupe Match</Text>
+              </View>
+              <View style={styles.matchScoreRow}>
+                <Text style={styles.matchNumber}>{similarity}</Text>
+                <Text style={styles.matchPercent}>%</Text>
+              </View>
               <Text style={styles.matchLabel}>Match Score</Text>
             </LinearGradient>
           </Animated.View>
@@ -227,8 +243,8 @@ export default function ProductDetailsScreen() {
                 onPress={() => openProductPage(original)}
               >
                 <Image source={{ uri: original.image }} style={styles.productImage} contentFit="cover" />
-                <View style={[styles.labelBadge, { backgroundColor: '#fce4ec' }]}>
-                  <Text style={[styles.labelText, { color: colors.primary }]}>ORIGINAL</Text>
+                <View style={[styles.labelBadge, styles.originalBadge]}>
+                  <Text style={[styles.labelText, styles.originalBadgeText]}>ORIGINAL</Text>
                 </View>
                 <Text style={styles.productBrand}>{original.brand}</Text>
                 <Text style={styles.productName} numberOfLines={2}>{original.name}</Text>
@@ -247,8 +263,8 @@ export default function ProductDetailsScreen() {
                   onPress={() => openProductPage(dupeProduct)}
                 >
                   <Image source={{ uri: dupeProduct.image }} style={styles.productImage} contentFit="cover" />
-                  <View style={[styles.labelBadge, { backgroundColor: colors.successLight }]}>
-                    <Text style={[styles.labelText, { color: colors.success }]}>DUPE</Text>
+                  <View style={[styles.labelBadge, styles.dupeBadge]}>
+                    <Text style={[styles.labelText, styles.dupeBadgeText]}>DUPE</Text>
                   </View>
                   <Text style={styles.productBrand}>{dupeProduct.brand}</Text>
                   <Text style={styles.productName} numberOfLines={2}>{dupeProduct.name}</Text>
@@ -407,19 +423,58 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   matchBanner: {
-    paddingVertical: spacing.xl + spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.xl,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  matchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.86)',
+  },
+  matchPillText: {
+    ...typography.smallBold,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  matchScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginTop: spacing.md,
   },
   matchNumber: {
-    fontSize: 52,
+    fontSize: 64,
     fontWeight: '800',
-    color: colors.textOnPrimary,
+    color: colors.primary,
     letterSpacing: -1,
+    lineHeight: 68,
+  },
+  matchPercent: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.primary,
+    marginTop: spacing.sm,
+    marginLeft: 2,
   },
   matchLabel: {
-    ...typography.caption,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: spacing.xs,
+    ...typography.captionBold,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   savingsRow: {
     paddingHorizontal: spacing.lg,
@@ -455,9 +510,11 @@ const styles = StyleSheet.create({
   },
   productCard: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.lg,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadows.sm,
   },
   productImage: {
@@ -477,6 +534,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  originalBadge: {
+    backgroundColor: colors.accentLight,
+    borderWidth: 1,
+    borderColor: colors.borderAccent,
+  },
+  originalBadgeText: {
+    color: colors.primary,
+  },
+  dupeBadge: {
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.25)',
+  },
+  dupeBadgeText: {
+    color: colors.success,
   },
   productBrand: {
     ...typography.small,
@@ -502,15 +575,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.accentLight,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: -4,
     zIndex: 1,
+    borderWidth: 3,
+    borderColor: colors.surface,
   },
   vsText: {
     ...typography.smallBold,
-    color: colors.primary,
+    color: colors.textOnPrimary,
   },
   shadesRow: {
     flexDirection: 'row',
@@ -539,8 +614,11 @@ const styles = StyleSheet.create({
   reasonsBox: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
-    backgroundColor: '#f5f0ff',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
     gap: spacing.md,
   },
   factsBox: {

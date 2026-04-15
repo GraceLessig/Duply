@@ -110,17 +110,17 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff3a8',
+    backgroundColor: colors.accentLight,
     paddingHorizontal: spacing.sm,
     paddingVertical: 5,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.25)',
+    borderColor: colors.borderAccent,
     marginBottom: spacing.sm,
   },
   matchText: {
     ...typography.smallBold,
-    color: '#8a4b00',
+    color: colors.primary,
   },
   priceRow: {
     flexDirection: 'row',

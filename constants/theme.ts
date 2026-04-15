@@ -46,7 +46,7 @@ export const gradients = {
   hero: ['#ffdce8', '#ffb9cf', '#ff8fb2'] as const,
   header: ['#ec4899', '#a855f7'] as const,
   card: ['#ffffff', '#fff5f8'] as const,
-  matchScore: ['#fff1a6', '#f59e0b'] as const,
+  matchScore: ['#fff8fb', '#ffe1e4', '#ff99a0'] as const,
 } as const;
 
 export const spacing = {

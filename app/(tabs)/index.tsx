@@ -45,16 +45,16 @@ export default function HomeScreen() {
           <View style={styles.kicker}>
             <Text style={styles.kickerText}>Beauty finds, but cheaper</Text>
           </View>
-          <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+          <View>
             <Text style={styles.heading}>Find Your{'\n'}Perfect Dupe</Text>
-          </Animated.View>
-          <Animated.View entering={FadeInDown.delay(250).duration(500)}>
+          </View>
+          <View>
             <Text style={styles.sub}>
               Discover affordable alternatives to your favorite beauty products
             </Text>
-          </Animated.View>
+          </View>
 
-          <Animated.View entering={FadeInDown.delay(400).duration(500)} style={{ width: '100%' }}>
+          <View style={{ width: '100%' }}>
             <View style={styles.searchArea}>
               <View style={styles.searchBar}>
                 <Search width={20} height={20} stroke={colors.accent} />
@@ -122,10 +122,10 @@ export default function HomeScreen() {
                 </View>
               ) : null}
             </View>
-          </Animated.View>
+          </View>
         </LinearGradient>
 
-        <Animated.View entering={FadeInDown.delay(430).duration(500)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.disclaimerCard}>
             <Text style={styles.disclaimerTitle}>Early Demo Disclaimer</Text>
             <Text style={styles.disclaimerBody}>
@@ -133,10 +133,10 @@ export default function HomeScreen() {
               are also actively working on adding stronger product image support.
             </Text>
           </View>
-        </Animated.View>
+        </View>
 
         {Platform.OS === 'web' ? (
-          <Animated.View entering={FadeInDown.delay(460).duration(500)} style={styles.section}>
+          <View style={styles.section}>
             <View style={styles.installCard}>
               <Text style={styles.installTitle}>On iPhone, add Duply to your home screen</Text>
               <Text style={styles.installBody}>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
                 </Pressable>
               ) : null}
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.section}>
