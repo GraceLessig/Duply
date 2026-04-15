@@ -53,6 +53,11 @@ def _normalize_text(value):
     return str(value).strip().lower()
 
 
+def _wants_new_products(query):
+    normalized = _normalize_text(query)
+    return any(token in normalized for token in ["2025", "2026", "new", "latest", "released", "launch"])
+
+
 def _build_comparison_profile(source):
     raw = source.get("raw", {}) if source else {}
     category = source.get("category") or raw.get("Category") or raw.get("category") or ""
@@ -222,7 +227,8 @@ def search_products(q: str):
 
     seen = set()
     combined = []
-    for product in [*local_results, *web_results]:
+    ordered_results = [*web_results, *local_results] if _wants_new_products(q) else [*local_results, *web_results]
+    for product in ordered_results:
         key = (
             _normalize_text(product.get("brand")),
             _normalize_text(product.get("product_name")),

@@ -17,7 +17,7 @@ SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "").strip()
 WEB_SEARCH_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_SEARCH_CACHE_TTL_SECONDS", "3600"))
 WEB_SEARCH_MAX_RESULTS = int(os.getenv("DUPLY_WEB_SEARCH_MAX_RESULTS", "8"))
 WEB_SEARCH_YEARS = [year.strip() for year in os.getenv("DUPLY_WEB_SEARCH_YEARS", "2025,2026").split(",") if year.strip()]
-WEB_SEARCH_REQUIRE_RELEASE_YEAR = os.getenv("DUPLY_WEB_SEARCH_REQUIRE_RELEASE_YEAR", "true").strip().lower() in {"1", "true", "yes"}
+WEB_SEARCH_REQUIRE_RELEASE_YEAR = os.getenv("DUPLY_WEB_SEARCH_REQUIRE_RELEASE_YEAR", "false").strip().lower() in {"1", "true", "yes"}
 WEB_IMAGE_LOOKUP_ENABLED = os.getenv("DUPLY_WEB_IMAGE_LOOKUP_ENABLED", os.getenv("DUPLY_WEB_SEARCH_ENABLED", "false")).strip().lower() in {"1", "true", "yes"}
 WEB_IMAGE_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_IMAGE_CACHE_TTL_SECONDS", "86400"))
 
@@ -179,8 +179,6 @@ def _normalize_serpapi_item(item, fallback_brand):
 
     product_type = _infer_product_type(title)
     release_year = _extract_release_year(source_text)
-    if WEB_SEARCH_REQUIRE_RELEASE_YEAR and not release_year:
-        return None
 
     product_url = item.get("product_link") or item.get("link") or ""
     image = item.get("thumbnail") or item.get("serpapi_thumbnail") or ""
@@ -309,8 +307,6 @@ def search_web_products(query, limit=WEB_SEARCH_MAX_RESULTS):
         return []
 
     query_brand = _find_allowed_brand(query)
-    if not query_brand:
-        return []
 
     cache_key = (normalized_query, limit)
     cached = _cache_get(_search_cache, cache_key)
@@ -318,7 +314,7 @@ def search_web_products(query, limit=WEB_SEARCH_MAX_RESULTS):
         return cached
 
     year_terms = " OR ".join(WEB_SEARCH_YEARS)
-    search_query = f'{query_brand} {query} new makeup product {year_terms}'.strip()
+    search_query = f'{query} new makeup product {year_terms}'.strip()
 
     try:
         response = _serpapi_get({
@@ -340,7 +336,7 @@ def search_web_products(query, limit=WEB_SEARCH_MAX_RESULTS):
         if not product:
             continue
 
-        if normalize_text(product.get("brand")) != normalize_text(query_brand):
+        if query_brand and normalize_text(product.get("brand")) != normalize_text(query_brand):
             continue
 
         key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
