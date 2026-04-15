@@ -215,6 +215,13 @@ def _product_from_record(record, fallback=None, enrich_image=False):
     }
 
 
+def _first_present(*values):
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
+
+
 @app.get("/health")
 def health():
     return {"ok": True, **get_recommendation_status()}
@@ -288,11 +295,20 @@ async def get_dupes(request: Request):
             "subcategory": product_type,
             "type": product_type,
         })
+        original_raw = (original_firestore or {}).get("raw", {})
+        original_price = _first_present(
+            (original_firestore or {}).get("price"),
+            original_raw.get("Price_USD"),
+            original_raw.get("price"),
+            original_raw.get("salePrice"),
+            original_raw.get("current_price"),
+            price,
+        )
         original = {
             "id": (original_firestore or {}).get("firestore_id") or f"{brand}-{name}".lower().replace(" ", "-"),
             "name": name,
             "brand": brand,
-            "price": _normalize_price(price),
+            "price": _normalize_price(original_price),
             "image": image or find_product_image(brand, name),
             "rating": 0,
             "category": category or (original_firestore or {}).get("category", "") or (matched_product or {}).get("category", "") or "",
