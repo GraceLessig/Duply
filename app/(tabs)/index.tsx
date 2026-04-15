@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Menu, TrendingUp } from 'react-native-feather';
+import { Menu, Search, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
 import { ProductCardSkeleton } from '../../components/SkeletonLoader';
@@ -57,7 +57,7 @@ export default function HomeScreen() {
           <Animated.View entering={FadeInDown.delay(400).duration(500)} style={{ width: '100%' }}>
             <View style={styles.searchArea}>
               <View style={styles.searchBar}>
-                <Image source={require('../../assets/images/duply-logo.png')} style={styles.searchLogo} contentFit="contain" />
+                <Search width={20} height={20} stroke={colors.accent} />
                 <TextInput
                   value={query}
                   onChangeText={(text) => {
@@ -293,12 +293,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.72)',
     ...shadows.lg,
-  },
-  searchLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   searchInput: {
     flex: 1,
