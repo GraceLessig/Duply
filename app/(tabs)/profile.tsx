@@ -1,23 +1,138 @@
 import { Href, useRouter } from 'expo-router';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Bookmark, DollarSign, Info, Lock, RefreshCw, Settings, Star, User } from 'react-native-feather';
+import React, { useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Bookmark, DollarSign, Info, Lock, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../hooks/useAuth';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useProfile } from '../../hooks/useProfile';
 
-const PROFILE_FEATURE_AVAILABLE = false;
 const SKIN_TYPES = ['Dry', 'Oily', 'Combination', 'Sensitive', 'Normal'];
 const FAVORITE_CATEGORIES = ['Foundation', 'Lipstick', 'Mascara', 'Blush', 'Eyeshadow', 'Bronzer'];
 const BUDGETS = ['Under $15', '$15-$25', '$25-$50', '$50+'];
 
 export default function ProfileScreen() {
-  if (!PROFILE_FEATURE_AVAILABLE) {
-    return <ProfileUnavailableScreen />;
+  const auth = useAuth();
+  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const submitEmail = async () => {
+    if (mode === 'signIn') {
+      await auth.signInWithEmail(email, password);
+      return;
+    }
+    await auth.signUpWithEmail(email, password, displayName);
+  };
+
+  if (auth.user) {
+    return <ProfileContent />;
   }
 
-  return <LegacyProfileContent />;
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.lockedScroll}>
+        <View style={styles.lockedHeader}>
+          <View style={styles.lockedIconWrap}>
+            <User width={34} height={34} stroke={colors.primary} />
+          </View>
+          <Text style={styles.lockedTitle}>Create Your Profile</Text>
+          <Text style={styles.lockedSubtitle}>
+            Sign in to save your preferences, keep your dashboard tidy, and make dÃ¼ply feel more personal.
+          </Text>
+        </View>
+
+        <View style={styles.lockedCard}>
+          {!auth.configured ? (
+            <View style={styles.authNotice}>
+              <Text style={styles.lockedCardTitle}>Firebase setup needed</Text>
+              <Text style={styles.lockedCardBody}>
+                Add your Firebase web app keys as environment variables to turn on Google and email sign-in.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Pressable onPress={auth.signInWithGoogle} style={styles.googleButton} disabled={auth.loading}>
+                <Text style={styles.googleMark}>G</Text>
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </Pressable>
+              {Platform.OS !== 'web' ? (
+                <Text style={styles.googleHint}>Google sign-in is currently available on the web build.</Text>
+              ) : null}
+
+              <View style={styles.authDivider}>
+                <View style={styles.authLine} />
+                <Text style={styles.authDividerText}>or use email</Text>
+                <View style={styles.authLine} />
+              </View>
+
+              <View style={styles.authToggle}>
+                <Pressable
+                  onPress={() => setMode('signIn')}
+                  style={[styles.authToggleButton, mode === 'signIn' && styles.authToggleButtonActive]}
+                >
+                  <Text style={[styles.authToggleText, mode === 'signIn' && styles.authToggleTextActive]}>Sign In</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setMode('signUp')}
+                  style={[styles.authToggleButton, mode === 'signUp' && styles.authToggleButtonActive]}
+                >
+                  <Text style={[styles.authToggleText, mode === 'signUp' && styles.authToggleTextActive]}>Create Account</Text>
+                </Pressable>
+              </View>
+
+              {mode === 'signUp' ? (
+                <>
+                  <Text style={styles.fieldLabel}>Display Name</Text>
+                  <TextInput
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    placeholder="Beauty Lover"
+                    placeholderTextColor={colors.textMuted}
+                    style={styles.input}
+                  />
+                </>
+              ) : null}
+
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                placeholder="you@example.com"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
+
+              <Text style={styles.fieldLabel}>Password</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="At least 6 characters"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
+
+              {auth.error ? <Text style={styles.authError}>{auth.error}</Text> : null}
+
+              <Pressable onPress={submitEmail} style={styles.primaryButton} disabled={auth.loading}>
+                {auth.loading ? (
+                  <ActivityIndicator size="small" color={colors.textOnPrimary} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{mode === 'signIn' ? 'Sign In' : 'Create Account'}</Text>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 function ProfileUnavailableScreen() {
@@ -51,8 +166,9 @@ function ProfileUnavailableScreen() {
   );
 }
 
-function LegacyProfileContent() {
+function ProfileContent() {
   const router = useRouter();
+  const { user, signOut, loading: authLoading } = useAuth();
   const { favorites } = useFavorites();
   const { profile, loaded, updateProfile, resetProfile } = useProfile();
 
@@ -68,8 +184,12 @@ function LegacyProfileContent() {
           <View style={styles.avatarCircle}>
             <User width={32} height={32} stroke={colors.primary} />
           </View>
-          <Text style={styles.name}>{profile.displayName}</Text>
-          <Text style={styles.email}>Your beauty dupe dashboard</Text>
+          <Text style={styles.name}>{user?.displayName || profile.displayName}</Text>
+          <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
+          <Pressable onPress={signOut} style={styles.signOutButton} disabled={authLoading}>
+            <LogOut width={16} height={16} stroke={colors.primary} />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
         </View>
 
         <View style={styles.statsWrapper}>
@@ -284,6 +404,95 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     ...typography.captionBold,
     color: colors.textOnPrimary,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  googleMark: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  googleButtonText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  googleHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  authNotice: {
+    gap: spacing.sm,
+  },
+  authDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.lg,
+  },
+  authLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  authDividerText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  authToggle: {
+    flexDirection: 'row',
+    padding: 4,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentLight,
+  },
+  authToggleButton: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+  },
+  authToggleButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  authToggleText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
+  authToggleTextActive: {
+    color: colors.textOnPrimary,
+  },
+  authError: {
+    ...typography.smallBold,
+    color: colors.error,
+    marginTop: spacing.md,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  signOutText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   statsWrapper: {
     marginTop: -24,
