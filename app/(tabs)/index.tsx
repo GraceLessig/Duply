@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Menu, Search, TrendingUp } from 'react-native-feather';
+import { Menu, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
 import { ProductCardSkeleton } from '../../components/SkeletonLoader';
@@ -33,11 +33,11 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
+        <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
+        <Text style={styles.brand}>duply</Text>
         <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
           <Menu width={24} height={24} stroke={colors.primary} />
         </Pressable>
-        <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
-        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -57,7 +57,7 @@ export default function HomeScreen() {
           <Animated.View entering={FadeInDown.delay(400).duration(500)} style={{ width: '100%' }}>
             <View style={styles.searchArea}>
               <View style={styles.searchBar}>
-                <Search width={20} height={20} stroke={colors.accent} />
+                <Image source={require('../../assets/images/duply-logo.png')} style={styles.searchLogo} contentFit="contain" />
                 <TextInput
                   value={query}
                   onChangeText={(text) => {
@@ -220,8 +220,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
   },
   brandLogo: {
-    width: 60,
-    height: 60,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  brand: {
+    ...typography.hero,
+    color: colors.primary,
+    flex: 1,
+    textAlign: 'center',
   },
   scrollContent: {
     paddingBottom: spacing.xxxl,
@@ -285,6 +293,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.72)',
     ...shadows.lg,
+  },
+  searchLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   searchInput: {
     flex: 1,
