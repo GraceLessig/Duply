@@ -1,0 +1,271 @@
+import hashlib
+import json
+import os
+import re
+import time
+from pathlib import Path
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+from firestore_products import normalize_product_type, normalize_text
+
+BASE_DIR = Path(__file__).resolve().parent
+METADATA_PATH = BASE_DIR / "cosmetics_metadata.json"
+
+WEB_SEARCH_ENABLED = os.getenv("DUPLY_WEB_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "").strip()
+WEB_SEARCH_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_SEARCH_CACHE_TTL_SECONDS", "3600"))
+WEB_SEARCH_MAX_RESULTS = int(os.getenv("DUPLY_WEB_SEARCH_MAX_RESULTS", "8"))
+WEB_SEARCH_YEARS = [year.strip() for year in os.getenv("DUPLY_WEB_SEARCH_YEARS", "2025,2026").split(",") if year.strip()]
+WEB_SEARCH_REQUIRE_RELEASE_YEAR = os.getenv("DUPLY_WEB_SEARCH_REQUIRE_RELEASE_YEAR", "true").strip().lower() in {"1", "true", "yes"}
+
+_allowed_brands = None
+_search_cache = {}
+_web_product_cache = {}
+
+
+def _load_allowed_brands():
+    global _allowed_brands
+
+    if _allowed_brands is not None:
+        return _allowed_brands
+
+    if not METADATA_PATH.exists():
+        _allowed_brands = {}
+        return _allowed_brands
+
+    try:
+        products = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        _allowed_brands = {}
+        return _allowed_brands
+
+    brands = {}
+    for product in products:
+        brand = str(product.get("brand") or "").strip()
+        normalized = normalize_text(brand)
+        if brand and normalized and normalized not in brands:
+            brands[normalized] = brand
+
+    _allowed_brands = brands
+    return _allowed_brands
+
+
+def _find_allowed_brand(text):
+    normalized_text = f" {normalize_text(text)} "
+    if not normalized_text.strip():
+        return ""
+
+    matches = []
+    for normalized_brand, display_brand in _load_allowed_brands().items():
+        pattern = f" {normalized_brand} "
+        if pattern in normalized_text:
+            matches.append((len(normalized_brand), display_brand))
+
+    if not matches:
+        return ""
+
+    matches.sort(reverse=True)
+    return matches[0][1]
+
+
+def _extract_price(raw_price):
+    if raw_price is None:
+        return 0
+
+    if isinstance(raw_price, (int, float)):
+        return round(float(raw_price), 2)
+
+    match = re.search(r"(\d+(?:\.\d{1,2})?)", str(raw_price).replace(",", ""))
+    if not match:
+        return 0
+
+    return round(float(match.group(1)), 2)
+
+
+def _infer_product_type(title):
+    text = normalize_text(title)
+    rules = [
+        ("foundation", "foundation"),
+        ("concealer", "concealer"),
+        ("blush", "blush"),
+        ("bronzer", "bronzer"),
+        ("powder", "powder"),
+        ("primer", "primer"),
+        ("highlighter", "highlighter"),
+        ("highlight", "highlighter"),
+        ("lipstick", "lipstick"),
+        ("lip gloss", "lipstick"),
+        ("gloss", "lipstick"),
+        ("eyeshadow", "eyeshadow"),
+        ("eye shadow", "eyeshadow"),
+        ("eyeliner", "eyeliner"),
+        ("eye liner", "eyeliner"),
+        ("mascara", "mascara"),
+        ("brow", "eyebrow"),
+        ("nail", "nail_polish"),
+        ("cleanser", "cleanser"),
+        ("moisturizer", "moisturizer"),
+        ("serum", "serum"),
+        ("sunscreen", "sunscreen"),
+        ("perfume", "perfume"),
+    ]
+
+    for needle, product_type in rules:
+        if needle in text:
+            return product_type
+
+    return "general"
+
+
+def _extract_release_year(text):
+    for year in WEB_SEARCH_YEARS:
+        if re.search(rf"\b{re.escape(year)}\b", text or ""):
+            return int(year)
+    return None
+
+
+def _web_product_id(item):
+    raw_key = "|".join([
+        normalize_text(item.get("brand")),
+        normalize_text(item.get("product_name")),
+        normalize_text(item.get("title-href")),
+    ])
+    digest = hashlib.sha1(raw_key.encode("utf-8")).hexdigest()[:16]
+    return f"web-{digest}"
+
+
+def _cache_get(cache, key):
+    entry = cache.get(key)
+    if not entry:
+        return None
+
+    cached_at, value = entry
+    if (time.time() - cached_at) > WEB_SEARCH_CACHE_TTL_SECONDS:
+        cache.pop(key, None)
+        return None
+
+    return value
+
+
+def _cache_set(cache, key, value):
+    cache[key] = (time.time(), value)
+
+
+def _serpapi_get(params):
+    url = "https://serpapi.com/search.json?" + urlencode(params)
+    request = Request(url, headers={"User-Agent": "Duply/1.0"})
+
+    with urlopen(request, timeout=12) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _normalize_serpapi_item(item, fallback_brand):
+    title = str(item.get("title") or "").strip()
+    source_text = " ".join([
+        title,
+        str(item.get("source") or ""),
+        str(item.get("snippet") or ""),
+        str(item.get("extensions") or ""),
+    ])
+    brand = _find_allowed_brand(source_text) or fallback_brand
+
+    if not brand:
+        return None
+
+    product_type = _infer_product_type(title)
+    release_year = _extract_release_year(source_text)
+    if WEB_SEARCH_REQUIRE_RELEASE_YEAR and not release_year:
+        return None
+
+    product_url = item.get("product_link") or item.get("link") or ""
+    image = item.get("thumbnail") or item.get("serpapi_thumbnail") or ""
+
+    normalized = {
+        "brand": brand,
+        "product_name": title,
+        "category": product_type,
+        "subcategory": normalize_product_type(product_type),
+        "type": normalize_product_type(product_type),
+        "price": _extract_price(item.get("extracted_price") or item.get("price")),
+        "rating": item.get("rating") or 0,
+        "image": image,
+        "website": item.get("source") or "web",
+        "title-href": product_url,
+        "releaseYear": release_year,
+        "source": "web",
+        "raw": {
+            "source": "web",
+            "website": item.get("source") or "",
+            "productUrl": product_url,
+            "releaseYear": release_year,
+            "snippet": item.get("snippet") or "",
+        },
+    }
+    normalized["firestore_id"] = _web_product_id(normalized)
+    normalized["combined_text"] = " ".join([
+        normalized["brand"],
+        normalized["product_name"],
+        normalized["category"],
+        str(normalized.get("releaseYear") or ""),
+    ]).strip()
+
+    _web_product_cache[normalized["firestore_id"]] = normalized
+    return normalized
+
+
+def get_web_product_by_id(product_id):
+    return _web_product_cache.get(product_id)
+
+
+def search_web_products(query, limit=WEB_SEARCH_MAX_RESULTS):
+    normalized_query = normalize_text(query)
+    if not WEB_SEARCH_ENABLED or not SERPAPI_API_KEY or not normalized_query:
+        return []
+
+    query_brand = _find_allowed_brand(query)
+    if not query_brand:
+        return []
+
+    cache_key = (normalized_query, limit)
+    cached = _cache_get(_search_cache, cache_key)
+    if cached is not None:
+        return cached
+
+    year_terms = " OR ".join(WEB_SEARCH_YEARS)
+    search_query = f'{query_brand} {query} new makeup product {year_terms}'.strip()
+
+    try:
+        response = _serpapi_get({
+            "engine": "google_shopping",
+            "q": search_query,
+            "api_key": SERPAPI_API_KEY,
+            "num": str(max(limit, 10)),
+        })
+    except Exception:
+        _cache_set(_search_cache, cache_key, [])
+        return []
+
+    items = response.get("shopping_results") or response.get("organic_results") or []
+    results = []
+    seen = set()
+
+    for item in items:
+        product = _normalize_serpapi_item(item, query_brand)
+        if not product:
+            continue
+
+        if normalize_text(product.get("brand")) != normalize_text(query_brand):
+            continue
+
+        key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(product)
+
+        if len(results) >= limit:
+            break
+
+    _cache_set(_search_cache, cache_key, results)
+    return results

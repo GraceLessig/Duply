@@ -1,5 +1,11 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 from firestore_products import (
     fetch_firestore_product,
     get_firestore_product_by_id,
@@ -8,6 +14,7 @@ from firestore_products import (
     search_firestore_products,
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
+from web_products import get_web_product_by_id, search_web_products
 
 app = FastAPI()
 
@@ -194,6 +201,9 @@ def _product_from_record(record, fallback=None):
         "packagingType": raw.get("Packaging_Type") or raw.get("form") or record.get("packagingType") or "",
         "productSize": raw.get("Product_Size") or raw.get("size") or record.get("productSize") or "",
         "skinType": raw.get("Skin_Type") or record.get("skinType") or "",
+        "source": record.get("source") or raw.get("source") or "catalog",
+        "productUrl": record.get("title-href") or raw.get("productUrl") or raw.get("title-href") or "",
+        "releaseYear": record.get("releaseYear") or raw.get("releaseYear") or None,
     }
 
 
@@ -204,8 +214,22 @@ def health():
 
 @app.get("/products/search")
 def search_products(q: str):
-    results = search_firestore_products(q, limit=20)
-    return [_product_from_record(product, fallback={"id": product.get("firestore_id", "")}) for product in results]
+    local_results = search_firestore_products(q, limit=20)
+    web_results = search_web_products(q, limit=8)
+
+    seen = set()
+    combined = []
+    for product in [*local_results, *web_results]:
+        key = (
+            _normalize_text(product.get("brand")),
+            _normalize_text(product.get("product_name")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(_product_from_record(product, fallback={"id": product.get("firestore_id", "")}))
+
+    return combined[:28]
 
 
 @app.get("/products/category/{category_or_type}")
@@ -216,6 +240,12 @@ def get_products_by_category(category_or_type: str):
 
 @app.get("/products/{product_id}")
 def get_product(product_id: str):
+    if product_id.startswith("web-"):
+        product = get_web_product_by_id(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Web product expired from cache")
+        return _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+
     product = get_firestore_product_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")

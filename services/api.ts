@@ -16,6 +16,9 @@ export interface Product {
   productSize?: string;
   skinType?: string;
   description?: string;
+  source?: 'catalog' | 'web';
+  productUrl?: string;
+  releaseYear?: number;
   tags?: string[];
   colors?: ProductColor[];
 }

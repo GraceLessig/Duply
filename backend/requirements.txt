@@ -8,3 +8,4 @@ pydantic
 pandas
 kagglehub
 firebase-admin
+python-dotenv
