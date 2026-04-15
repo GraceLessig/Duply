@@ -231,11 +231,12 @@ def health():
 @app.get("/products/search")
 def search_products(q: str):
     local_results = search_firestore_products(q, limit=20)
-    web_results = search_web_products(q, limit=8)
+    include_web_results = _wants_new_products(q)
+    web_results = search_web_products(q, limit=8) if include_web_results else []
 
     seen = set()
     combined = []
-    ordered_results = [*web_results, *local_results] if _wants_new_products(q) else [*local_results, *web_results]
+    ordered_results = [*web_results, *local_results] if include_web_results else local_results
     for product in ordered_results:
         key = (
             _normalize_text(product.get("brand")),

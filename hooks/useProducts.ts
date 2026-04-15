@@ -74,7 +74,7 @@ export function useSearch() {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
-    if (!trimmedQuery) {
+    if (trimmedQuery.length < 2) {
       setResults([]);
       setLoading(false);
       setError(null);
