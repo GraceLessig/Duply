@@ -1,16 +1,14 @@
 import { Href, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Bookmark, DollarSign, Info, Lock, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
+import { Bookmark, Camera, DollarSign, Info, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useProfile } from '../../hooks/useProfile';
-
-const SKIN_TYPES = ['Dry', 'Oily', 'Combination', 'Sensitive', 'Normal'];
-const FAVORITE_CATEGORIES = ['Foundation', 'Lipstick', 'Mascara', 'Blush', 'Eyeshadow', 'Bronzer'];
-const BUDGETS = ['Under $15', '$15-$25', '$25-$50', '$50+'];
 
 export default function ProfileScreen() {
   const auth = useAuth();
@@ -135,37 +133,6 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileUnavailableScreen() {
-  const router = useRouter();
-
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.lockedScroll}>
-        <View style={styles.lockedHeader}>
-          <View style={styles.lockedIconWrap}>
-            <Lock width={34} height={34} stroke={colors.primary} />
-          </View>
-          <Text style={styles.lockedTitle}>Profile Isn&apos;t Available Yet</Text>
-          <Text style={styles.lockedSubtitle}>
-            We&apos;re still building this feature. Your existing profile functionality is preserved, but it&apos;s hidden
-            from users for now.
-          </Text>
-        </View>
-
-        <View style={styles.lockedCard}>
-          <Text style={styles.lockedCardTitle}>What you can use instead</Text>
-          <Text style={styles.lockedCardBody}>
-            Keep exploring dupes, saving favorites, and browsing products while we finish the profile experience.
-          </Text>
-          <Pressable onPress={() => router.push('/about' as Href)} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Learn More About düply</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
 function ProfileContent() {
   const router = useRouter();
   const { user, signOut, loading: authLoading } = useAuth();
@@ -177,14 +144,41 @@ function ProfileContent() {
   const savedProducts = favorites.filter(item => (item.kind || 'comparison') === 'product').length;
   const savedComparisons = favorites.filter(item => (item.kind || 'comparison') === 'comparison').length;
 
+  const pickProfilePhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+      base64: true,
+    });
+
+    const asset = result.canceled ? null : result.assets[0];
+    if (asset?.uri) {
+      const photoUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri;
+      updateProfile({ photoUri });
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <View style={styles.avatarCircle}>
-            <User width={32} height={32} stroke={colors.primary} />
-          </View>
-          <Text style={styles.name}>{user?.displayName || profile.displayName}</Text>
+          <Pressable onPress={pickProfilePhoto} style={styles.avatarCircle}>
+            {profile.photoUri ? (
+              <Image source={{ uri: profile.photoUri }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <User width={32} height={32} stroke={colors.primary} />
+            )}
+          </Pressable>
+          <Pressable onPress={pickProfilePhoto} style={styles.photoButton}>
+            <Camera width={16} height={16} stroke={colors.primary} />
+            <Text style={styles.photoButtonText}>{profile.photoUri ? 'Change Photo' : 'Upload Photo'}</Text>
+          </Pressable>
+          <Text style={styles.name}>{profile.username || user?.displayName || 'Beauty Lover'}</Text>
           <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
           <Pressable onPress={signOut} style={styles.signOutButton} disabled={authLoading}>
             <LogOut width={16} height={16} stroke={colors.primary} />
@@ -208,50 +202,18 @@ function ProfileContent() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Profile</Text>
           <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Display Name</Text>
+            <Text style={styles.fieldLabel}>Username</Text>
             <TextInput
-              value={profile.displayName}
-              onChangeText={text => updateProfile({ displayName: text })}
-              placeholder="Add your name"
+              value={profile.username}
+              onChangeText={text => updateProfile({ username: text })}
+              placeholder="Add a username"
               placeholderTextColor={colors.textMuted}
               style={styles.input}
             />
-
-            <Text style={styles.fieldLabel}>Skin Type</Text>
-            <View style={styles.chipsWrap}>
-              {SKIN_TYPES.map(item => (
-                <Chip
-                  key={item}
-                  label={item}
-                  active={profile.skinType === item}
-                  onPress={() => updateProfile({ skinType: item })}
-                />
-              ))}
-            </View>
-
-            <Text style={styles.fieldLabel}>Favorite Category</Text>
-            <View style={styles.chipsWrap}>
-              {FAVORITE_CATEGORIES.map(item => (
-                <Chip
-                  key={item}
-                  label={item}
-                  active={profile.favoriteCategory === item}
-                  onPress={() => updateProfile({ favoriteCategory: item })}
-                />
-              ))}
-            </View>
-
-            <Text style={styles.fieldLabel}>Budget</Text>
-            <View style={styles.chipsWrap}>
-              {BUDGETS.map(item => (
-                <Chip
-                  key={item}
-                  label={item}
-                  active={profile.budget === item}
-                  onPress={() => updateProfile({ budget: item })}
-                />
-              ))}
-            </View>
+            <Pressable onPress={pickProfilePhoto} style={styles.secondaryButton}>
+              <Camera width={16} height={16} stroke={colors.primary} />
+              <Text style={styles.secondaryButtonText}>Upload Profile Photo</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -283,14 +245,6 @@ function StatItem({ icon: Icon, value, label, bg, color }: any) {
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
-  );
-}
-
-function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
-  return (
-    <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -339,7 +293,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
+    overflow: 'hidden',
     ...shadows.md,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  photoButtonText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   lockedIconWrap: {
     width: 82,
@@ -570,30 +545,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     ...typography.body,
   },
-  chipsWrap: {
+  secondaryButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    marginTop: spacing.lg,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  chipActive: {
-    backgroundColor: colors.tabActiveBg,
-    borderColor: colors.borderAccent,
-  },
-  chipText: {
-    ...typography.small,
-    color: colors.text,
-  },
-  chipTextActive: {
+  secondaryButtonText: {
+    ...typography.captionBold,
     color: colors.primary,
-    fontWeight: '700',
   },
   settingsItem: {
     flexDirection: 'row',

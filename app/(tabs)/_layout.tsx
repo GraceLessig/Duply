@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Heart, Home, User } from 'react-native-feather';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing } from '../../constants/theme';
 
 export default function TabLayout() {
   return (
@@ -11,7 +11,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
-        tabBarLabelStyle: tabStyles.label,
+        tabBarShowLabel: false,
         tabBarStyle: tabStyles.bar,
         tabBarItemStyle: tabStyles.item,
         animation: 'shift',
@@ -20,7 +20,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: '',
+          tabBarAccessibilityLabel: 'Home',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <Home width={22} height={22} stroke={color} />
@@ -31,7 +33,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          title: 'Favorites',
+          title: '',
+          tabBarAccessibilityLabel: 'Favorites',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <Heart width={22} height={22} stroke={color} />
@@ -42,7 +46,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: '',
+          tabBarAccessibilityLabel: 'Profile',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <User width={22} height={22} stroke={color} />
@@ -74,11 +80,6 @@ const tabStyles = StyleSheet.create({
   item: {
     paddingVertical: spacing.xs,
     paddingBottom: spacing.sm,
-  },
-  label: {
-    ...typography.small,
-    fontWeight: '600',
-    marginTop: spacing.xs,
   },
   iconWrap: {
     padding: spacing.sm,

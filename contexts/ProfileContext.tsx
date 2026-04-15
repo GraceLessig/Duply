@@ -4,10 +4,8 @@ import React, { createContext, useCallback, useEffect, useState } from 'react';
 const STORAGE_KEY = '@duply_profile';
 
 export interface ProfilePreferences {
-  displayName: string;
-  skinType: string;
-  favoriteCategory: string;
-  budget: string;
+  username: string;
+  photoUri: string;
 }
 
 export interface ProfileContextValue {
@@ -18,10 +16,8 @@ export interface ProfileContextValue {
 }
 
 const DEFAULT_PROFILE: ProfilePreferences = {
-  displayName: 'Beauty Lover',
-  skinType: 'Combination',
-  favoriteCategory: 'Foundation',
-  budget: '$25-$50',
+  username: 'Beauty Lover',
+  photoUri: '',
 };
 
 export const ProfileContext = createContext<ProfileContextValue>({
