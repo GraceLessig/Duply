@@ -1,13 +1,12 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
-import { colors, gradients, radius, shadows, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useActivity } from '../hooks/useActivity';
 import { useFavorites } from '../hooks/useFavorites';
 import type { Product } from '../services/api';
@@ -198,7 +197,7 @@ export default function ProductDetailsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {isComparisonView ? (
           <Animated.View entering={FadeInDown.duration(500)}>
-            <LinearGradient colors={[...gradients.matchScore]} style={styles.matchBanner}>
+            <View style={styles.matchBanner}>
               <View style={styles.matchPill}>
                 <Feather name="check-circle" size={15} color={colors.primary} />
                 <Text style={styles.matchPillText}>Dupe Match</Text>
@@ -208,7 +207,7 @@ export default function ProductDetailsScreen() {
                 <Text style={styles.matchPercent}>%</Text>
               </View>
               <Text style={styles.matchLabel}>Match Score</Text>
-            </LinearGradient>
+            </View>
           </Animated.View>
         ) : (
           <Animated.View entering={FadeInDown.duration(500)} style={styles.productHero}>
@@ -425,7 +424,7 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gradientStart,
+    backgroundColor: colors.accentLight,
   },
   imagePlaceholderText: {
     ...typography.smallBold,
@@ -450,6 +449,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   matchBanner: {
+    backgroundColor: colors.accentLight,
     marginHorizontal: spacing.lg,
     marginTop: spacing.xl,
     paddingVertical: spacing.xl,

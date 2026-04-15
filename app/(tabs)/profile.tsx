@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Href, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -27,7 +26,7 @@ function ProfileUnavailableScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.lockedScroll}>
-        <LinearGradient colors={[colors.gradientStart, colors.gradientMid, colors.gradientEnd]} style={styles.lockedHeader}>
+        <View style={styles.lockedHeader}>
           <View style={styles.lockedIconWrap}>
             <Lock width={34} height={34} stroke={colors.primary} />
           </View>
@@ -36,7 +35,7 @@ function ProfileUnavailableScreen() {
             We&apos;re still building this feature. Your existing profile functionality is preserved, but it&apos;s hidden
             from users for now.
           </Text>
-        </LinearGradient>
+        </View>
 
         <View style={styles.lockedCard}>
           <Text style={styles.lockedCardTitle}>What you can use instead</Text>
@@ -65,13 +64,13 @@ function LegacyProfileContent() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <LinearGradient colors={[colors.gradientStart, colors.gradientMid, colors.gradientEnd]} style={styles.header}>
+        <View style={styles.header}>
           <View style={styles.avatarCircle}>
             <User width={32} height={32} stroke={colors.primary} />
           </View>
           <Text style={styles.name}>{profile.displayName}</Text>
           <Text style={styles.email}>Your beauty dupe dashboard</Text>
-        </LinearGradient>
+        </View>
 
         <View style={styles.statsWrapper}>
           <View style={styles.statsCard}>
@@ -200,11 +199,13 @@ const styles = StyleSheet.create({
     minHeight: '100%',
   },
   header: {
+    backgroundColor: colors.accentLight,
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.xxl + 12,
     alignItems: 'center',
   },
   lockedHeader: {
+    backgroundColor: colors.accentLight,
     paddingTop: spacing.xxxl,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,

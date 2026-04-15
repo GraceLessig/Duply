@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gradientStart,
+    backgroundColor: colors.accentLight,
   },
   info: {
     flex: 1,

@@ -17,13 +17,9 @@ export const colors = {
   clottedCream: '#FFF7FB',
   strawberryMilk: '#FFD1E8',
 
-  gradientStart: '#FFF7FB',
-  gradientMid: '#FFF9F0',
-  gradientEnd: '#FFD1E8',
-
   background: '#FFF7FB',
   surface: '#FFFFFF',
-  surfaceElevated: '#FFF0C2',
+  surfaceElevated: '#FFF6F9',
 
   text: '#171015',
   textSecondary: '#4A2737',
@@ -45,18 +41,10 @@ export const colors = {
 
   tabInactive: '#5D4A55',
   tabActive: '#2A0B26',
-  tabActiveBg: '#FFF9F0',
+  tabActiveBg: '#FFD1E8',
 
   skeleton: '#F2D6E3',
   skeletonHighlight: '#FFF7FB',
-} as const;
-
-export const gradients = {
-  main: [colors.background, colors.surfaceElevated, '#FFF2F8'] as const,
-  hero: [colors.cream, colors.accentLight, colors.pink] as const,
-  header: [colors.cream, colors.accentLight] as const,
-  card: [colors.surface, colors.surfaceElevated] as const,
-  matchScore: [colors.cream, colors.accentLight, colors.surface] as const,
 } as const;
 
 export const spacing = {

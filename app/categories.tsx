@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -6,7 +5,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Skeleton } from '../components/SkeletonLoader';
-import { colors, gradients, radius, shadows, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useCategories } from '../hooks/useProducts';
 
 export default function CategoriesScreen() {
@@ -23,7 +22,7 @@ export default function CategoriesScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <LinearGradient colors={[...gradients.main]} style={styles.content}>
+      <View style={styles.content}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {loading ? (
             [1, 2, 3, 4].map(i => (
@@ -50,7 +49,7 @@ export default function CategoriesScreen() {
             ))
           )}
         </ScrollView>
-      </LinearGradient>
+      </View>
     </SafeAreaView>
   );
 }
@@ -81,6 +80,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scroll: {
     padding: spacing.lg,

@@ -1,12 +1,11 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Clock, Search, X } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
-import { colors, gradients, radius, shadows, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useActivity } from '../hooks/useActivity';
 import { useSearch } from '../hooks/useProducts';
 
@@ -150,7 +149,7 @@ export default function SearchScreen() {
         {renderSuggestions()}
       </View>
 
-      <LinearGradient colors={[...gradients.main]} style={styles.content}>
+      <View style={styles.content}>
         {!showingSuggestions ? (
           <>
             <View style={styles.historyHeader}>
@@ -177,7 +176,7 @@ export default function SearchScreen() {
             />
           </>
         ) : null}
-      </LinearGradient>
+      </View>
     </SafeAreaView>
   );
 }
@@ -294,6 +293,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   resultItem: {
     flexDirection: 'row',
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   resultImagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gradientStart,
+    backgroundColor: colors.accentLight,
   },
   placeholderEmoji: {
     fontSize: 20,

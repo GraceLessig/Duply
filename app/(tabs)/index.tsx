@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -9,7 +8,7 @@ import { Menu, Search, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
 import { ProductCardSkeleton } from '../../components/SkeletonLoader';
-import { colors, gradients, radius, shadows, spacing, typography } from '../../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useActivity } from '../../hooks/useActivity';
 import { useSearch } from '../../hooks/useProducts';
 
@@ -41,7 +40,7 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
+        <View style={styles.hero}>
           <View style={styles.kicker}>
             <Text style={styles.kickerText}>Beauty finds, but cheaper</Text>
           </View>
@@ -123,7 +122,7 @@ export default function HomeScreen() {
               ) : null}
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         <View style={styles.section}>
           <View style={styles.disclaimerCard}>
@@ -236,6 +235,9 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radius.md,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   brand: {
     ...typography.hero,
@@ -247,6 +249,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   hero: {
+    backgroundColor: colors.accentLight,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.xxl,
