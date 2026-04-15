@@ -34,7 +34,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
         <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
-        <Text style={styles.brand}>duply</Text>
+        <Text style={styles.brand}>düply</Text>
         <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
           <Menu width={24} height={24} stroke={colors.primary} />
         </Pressable>

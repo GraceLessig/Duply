@@ -42,16 +42,12 @@ export default function CategoriesScreen() {
                   }
                 >
                   <LinearGradient
-                    colors={[cat.color, `${cat.color}88`]}
+                    colors={[cat.color, '#f7d9e3']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.cardGradient}
                   >
-                    <Text style={styles.emoji}>{cat.emoji}</Text>
-                    <View>
-                      <Text style={styles.cardText}>{cat.name}</Text>
-                      <Text style={styles.cardSubtext}>Browse {cat.name.toLowerCase()} products from your catalog</Text>
-                    </View>
+                    <Text style={styles.cardText}>{cat.name}</Text>
                   </LinearGradient>
                 </Pressable>
               </Animated.View>
@@ -106,22 +102,12 @@ const styles = StyleSheet.create({
   cardGradient: {
     height: 124,
     borderRadius: radius.xl,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
+    justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-  },
-  emoji: {
-    fontSize: 42,
   },
   cardText: {
     ...typography.h2,
-    color: colors.surface,
-  },
-  cardSubtext: {
-    ...typography.caption,
-    color: 'rgba(255,255,255,0.88)',
-    marginTop: 4,
-    maxWidth: 220,
+    color: colors.primary,
   },
 });

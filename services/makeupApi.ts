@@ -101,12 +101,11 @@ export const makeupApiService: DataService = {
 
   async getCategories(): Promise<Category[]> {
     return [
-      { id: 'eyes', name: 'Eyes', emoji: '👁️', productType: 'eyeshadow', color: '#e8b4f8' },
-      { id: 'lips', name: 'Lips', emoji: '💄', productType: 'lipstick', color: '#f8a4b8' },
-      { id: 'face', name: 'Face', emoji: '✨', productType: 'foundation', color: '#f8c4a4' },
-      { id: 'skin', name: 'Skin', emoji: '🧴', productType: 'blush', color: '#a4d8f8' },
-      { id: 'mascara', name: 'Mascara', emoji: '🖌️', productType: 'mascara', color: '#c4b4f8' },
-      { id: 'bronzer', name: 'Bronzer', emoji: '☀️', productType: 'bronzer', color: '#f8d4a4' },
+      { id: 'eyes', name: 'Eyes', emoji: '', productType: 'eyeshadow', color: '#f3cad8' },
+      { id: 'lips', name: 'Lips', emoji: '', productType: 'lipstick', color: '#efbfd0' },
+      { id: 'face', name: 'Face', emoji: '', productType: 'foundation', color: '#f6d9e2' },
+      { id: 'skin', name: 'Skin', emoji: '', productType: 'blush', color: '#efc7d6' },
+      { id: 'mascara', name: 'Mascara', emoji: '', productType: 'mascara', color: '#e7b4c8' },
     ];
   },
 
