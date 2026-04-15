@@ -124,10 +124,57 @@ PRODUCT_TYPE_ALIASES = {
     "sunscreen": "sunscreen",
 }
 
+CATEGORY_BUCKETS = {
+    "eyes": {
+        "eyeshadow",
+        "eyeliner",
+        "mascara",
+        "eyebrow",
+    },
+    "lips": {
+        "lipstick",
+        "lip gloss",
+        "lip_gloss",
+        "lip stain",
+    },
+    "face": {
+        "foundation",
+        "concealer",
+        "blush",
+        "bronzer",
+        "powder",
+        "primer",
+        "highlighter",
+    },
+    "skincare": {
+        "cleanser",
+        "moisturizer",
+        "serum",
+        "sunscreen",
+        "face_mask",
+        "face mask",
+        "bodywash",
+        "body wash",
+    },
+}
+
 
 def normalize_product_type(value):
     normalized = normalize_text(value)
     return PRODUCT_TYPE_ALIASES.get(normalized, normalized)
+
+
+def _product_bucket(product):
+    product_type = normalize_product_type(product.get("subcategory") or product.get("type"))
+    product_category = normalize_product_type(product.get("category"))
+    candidates = {product_type, product_category}
+
+    for bucket, values in CATEGORY_BUCKETS.items():
+        normalized_values = {normalize_product_type(value) for value in values}
+        if candidates & normalized_values:
+            return bucket
+
+    return "other"
 
 
 def _candidate_values(record, keys):
@@ -577,12 +624,18 @@ def list_products_by_category(category_or_type, limit=200):
     for product in products:
         product_type = normalize_product_type(product.get("subcategory") or product.get("type"))
         product_category = normalize_product_type(product.get("category"))
-        if normalized_target not in {product_type, product_category}:
+        product_bucket = _product_bucket(product)
+        if normalized_target in CATEGORY_BUCKETS or normalized_target == "other":
+            if normalized_target != product_bucket:
+                continue
+        elif normalized_target not in {product_type, product_category}:
             continue
         matches.append(product)
 
     matches.sort(
         key=lambda product: (
+            _product_bucket(product),
+            normalize_text(product.get("subcategory") or product.get("type")),
             normalize_text(product.get("brand")),
             normalize_text(product.get("product_name")),
         )

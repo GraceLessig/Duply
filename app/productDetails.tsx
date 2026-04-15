@@ -212,7 +212,13 @@ export default function ProductDetailsScreen() {
           </Animated.View>
         ) : (
           <Animated.View entering={FadeInDown.duration(500)} style={styles.productHero}>
-            <Image source={{ uri: original.image }} style={styles.heroImage} contentFit="cover" />
+            {original.image ? (
+              <Image source={{ uri: original.image }} style={styles.heroImage} contentFit="cover" />
+            ) : (
+              <View style={[styles.heroImage, styles.imagePlaceholder]}>
+                <Text style={styles.imagePlaceholderText}>No image</Text>
+              </View>
+            )}
             <Text style={styles.heroBrand}>{original.brand}</Text>
             <Text style={styles.heroName}>{original.name}</Text>
             <Text style={styles.heroPrice}>${original.price.toFixed(2)}</Text>
@@ -242,7 +248,13 @@ export default function ProductDetailsScreen() {
                 style={styles.productCard}
                 onPress={() => openProductPage(original)}
               >
-                <Image source={{ uri: original.image }} style={styles.productImage} contentFit="cover" />
+                {original.image ? (
+                  <Image source={{ uri: original.image }} style={styles.productImage} contentFit="cover" />
+                ) : (
+                  <View style={[styles.productImage, styles.imagePlaceholder]}>
+                    <Text style={styles.imagePlaceholderText}>No image</Text>
+                  </View>
+                )}
                 <View style={[styles.labelBadge, styles.originalBadge]}>
                   <Text style={[styles.labelText, styles.originalBadgeText]}>ORIGINAL</Text>
                 </View>
@@ -262,7 +274,13 @@ export default function ProductDetailsScreen() {
                   style={styles.productCard}
                   onPress={() => openProductPage(dupeProduct)}
                 >
-                  <Image source={{ uri: dupeProduct.image }} style={styles.productImage} contentFit="cover" />
+                  {dupeProduct.image ? (
+                    <Image source={{ uri: dupeProduct.image }} style={styles.productImage} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.productImage, styles.imagePlaceholder]}>
+                      <Text style={styles.imagePlaceholderText}>No image</Text>
+                    </View>
+                  )}
                   <View style={[styles.labelBadge, styles.dupeBadge]}>
                     <Text style={[styles.labelText, styles.dupeBadgeText]}>DUPE</Text>
                   </View>
@@ -403,6 +421,15 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     backgroundColor: colors.skeleton,
     ...shadows.md,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gradientStart,
+  },
+  imagePlaceholderText: {
+    ...typography.smallBold,
+    color: colors.textMuted,
   },
   heroBrand: {
     ...typography.small,

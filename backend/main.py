@@ -14,7 +14,7 @@ from firestore_products import (
     search_firestore_products,
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
-from web_products import get_web_product_by_id, search_web_products
+from web_products import find_product_image, get_web_product_by_id, search_web_products
 
 app = FastAPI()
 
@@ -172,7 +172,7 @@ def _build_match_reason(original_source, dupe_source):
     return ", ".join(reasons[:3])
 
 
-def _product_from_record(record, fallback=None):
+def _product_from_record(record, fallback=None, enrich_image=False):
     fallback = fallback or {}
 
     explicit_id = record.get("firestore_id") or fallback.get("id", "")
@@ -183,13 +183,16 @@ def _product_from_record(record, fallback=None):
         record.get("type") or record.get("subcategory") or fallback.get("productType", "") or category
     )
     raw = record.get("raw", {})
+    image = record.get("image") or fallback.get("image", "")
+    if enrich_image and not image:
+        image = find_product_image(brand, name)
 
     return {
         "id": explicit_id or _slugify(f"{brand}-{name}"),
         "name": name,
         "brand": brand,
         "price": _normalize_price(record.get("price") if record.get("price") is not None else fallback.get("price")),
-        "image": record.get("image") or fallback.get("image", ""),
+        "image": image,
         "rating": _normalize_number(record.get("rating"), _normalize_number(fallback.get("rating"), 0)),
         "category": category,
         "productType": product_type,
@@ -244,13 +247,13 @@ def get_product(product_id: str):
         product = get_web_product_by_id(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Web product expired from cache")
-        return _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+        return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
 
     product = get_firestore_product_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+    return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
 
 
 @app.post("/dupes")
@@ -284,7 +287,7 @@ async def get_dupes(request: Request):
             "name": name,
             "brand": brand,
             "price": _normalize_price(price),
-            "image": image,
+            "image": image or find_product_image(brand, name),
             "rating": 0,
             "category": category or (original_firestore or {}).get("category", "") or (matched_product or {}).get("category", "") or "",
             "productType": normalize_product_type(
@@ -317,6 +320,7 @@ async def get_dupes(request: Request):
                     "id": ranked_record.get("firestore_id", ""),
                     "image": "",
                 },
+                enrich_image=True,
             )
             savings = max(original["price"] - dupe["price"], 0)
             similarity = _compute_match_percentage(

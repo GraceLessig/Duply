@@ -18,9 +18,12 @@ WEB_SEARCH_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_SEARCH_CACHE_TTL_SECONDS
 WEB_SEARCH_MAX_RESULTS = int(os.getenv("DUPLY_WEB_SEARCH_MAX_RESULTS", "8"))
 WEB_SEARCH_YEARS = [year.strip() for year in os.getenv("DUPLY_WEB_SEARCH_YEARS", "2025,2026").split(",") if year.strip()]
 WEB_SEARCH_REQUIRE_RELEASE_YEAR = os.getenv("DUPLY_WEB_SEARCH_REQUIRE_RELEASE_YEAR", "true").strip().lower() in {"1", "true", "yes"}
+WEB_IMAGE_LOOKUP_ENABLED = os.getenv("DUPLY_WEB_IMAGE_LOOKUP_ENABLED", os.getenv("DUPLY_WEB_SEARCH_ENABLED", "false")).strip().lower() in {"1", "true", "yes"}
+WEB_IMAGE_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_IMAGE_CACHE_TTL_SECONDS", "86400"))
 
 _allowed_brands = None
 _search_cache = {}
+_image_cache = {}
 _web_product_cache = {}
 
 
@@ -141,7 +144,8 @@ def _cache_get(cache, key):
         return None
 
     cached_at, value = entry
-    if (time.time() - cached_at) > WEB_SEARCH_CACHE_TTL_SECONDS:
+    ttl = WEB_IMAGE_CACHE_TTL_SECONDS if cache is _image_cache else WEB_SEARCH_CACHE_TTL_SECONDS
+    if (time.time() - cached_at) > ttl:
         cache.pop(key, None)
         return None
 
@@ -212,6 +216,87 @@ def _normalize_serpapi_item(item, fallback_brand):
 
     _web_product_cache[normalized["firestore_id"]] = normalized
     return normalized
+
+
+def _meaningful_tokens(value):
+    stopwords = {
+        "the", "and", "for", "with", "new", "makeup", "product", "set", "mini",
+        "travel", "size", "pack", "shade", "color", "colour", "no", "spf",
+    }
+    tokens = re.findall(r"[a-z0-9]+", normalize_text(value))
+    return [token for token in tokens if len(token) > 2 and token not in stopwords]
+
+
+def _looks_like_product_image_result(item, brand, product_name):
+    text = normalize_text(" ".join([
+        str(item.get("title") or ""),
+        str(item.get("source") or ""),
+        str(item.get("snippet") or ""),
+    ]))
+    if normalize_text(brand) not in text:
+        return False
+
+    tokens = _meaningful_tokens(product_name)
+    if not tokens:
+        return True
+
+    token_matches = sum(1 for token in tokens[:6] if token in text)
+    return token_matches >= max(1, min(3, len(tokens)))
+
+
+def _candidate_image_url(item):
+    return (
+        item.get("thumbnail")
+        or item.get("serpapi_thumbnail")
+        or item.get("original")
+        or item.get("image")
+        or ""
+    )
+
+
+def find_product_image(brand, product_name):
+    brand = str(brand or "").strip()
+    product_name = str(product_name or "").strip()
+    if not WEB_IMAGE_LOOKUP_ENABLED or not SERPAPI_API_KEY or not brand or not product_name:
+        return ""
+
+    if normalize_text(brand) not in _load_allowed_brands():
+        return ""
+
+    cache_key = (normalize_text(brand), normalize_text(product_name))
+    cached = _cache_get(_image_cache, cache_key)
+    if cached is not None:
+        return cached
+
+    queries = [
+        {
+            "engine": "google_shopping",
+            "q": f"{brand} {product_name}",
+            "api_key": SERPAPI_API_KEY,
+            "num": "6",
+        },
+        {
+            "engine": "google_images",
+            "q": f"{brand} {product_name} product image",
+            "api_key": SERPAPI_API_KEY,
+        },
+    ]
+
+    for params in queries:
+        try:
+            response = _serpapi_get(params)
+        except Exception:
+            continue
+
+        items = response.get("shopping_results") or response.get("images_results") or response.get("organic_results") or []
+        for item in items:
+            image_url = _candidate_image_url(item)
+            if image_url and _looks_like_product_image_result(item, brand, product_name):
+                _cache_set(_image_cache, cache_key, image_url)
+                return image_url
+
+    _cache_set(_image_cache, cache_key, "")
+    return ""
 
 
 def get_web_product_by_id(product_id):
