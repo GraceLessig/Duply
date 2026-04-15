@@ -137,7 +137,7 @@ function ProfileContent() {
   const router = useRouter();
   const { user, signOut, loading: authLoading } = useAuth();
   const { favorites } = useFavorites();
-  const { profile, loaded, updateProfile, resetProfile } = useProfile();
+  const { profile, loaded, saving, error, updateProfile, uploadProfilePhoto, resetProfile } = useProfile();
 
   const savedItems = favorites.length;
   const totalSavings = favorites.reduce((sum, item) => sum + item.savings, 0);
@@ -159,7 +159,7 @@ function ProfileContent() {
     const asset = result.canceled ? null : result.assets[0];
     if (asset?.uri) {
       const photoUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri;
-      updateProfile({ photoUri });
+      await uploadProfilePhoto(photoUri, asset.mimeType);
     }
   };
 
@@ -167,16 +167,18 @@ function ProfileContent() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable onPress={pickProfilePhoto} style={styles.avatarCircle}>
+          <Pressable onPress={pickProfilePhoto} style={styles.avatarCircle} disabled={saving}>
             {profile.photoUri ? (
               <Image source={{ uri: profile.photoUri }} style={styles.avatarImage} contentFit="cover" />
             ) : (
               <User width={32} height={32} stroke={colors.primary} />
             )}
           </Pressable>
-          <Pressable onPress={pickProfilePhoto} style={styles.photoButton}>
+          <Pressable onPress={pickProfilePhoto} style={styles.photoButton} disabled={saving}>
             <Camera width={16} height={16} stroke={colors.primary} />
-            <Text style={styles.photoButtonText}>{profile.photoUri ? 'Change Photo' : 'Upload Photo'}</Text>
+            <Text style={styles.photoButtonText}>
+              {saving ? 'Saving...' : profile.photoUri ? 'Change Photo' : 'Upload Photo'}
+            </Text>
           </Pressable>
           <Text style={styles.name}>{profile.username || user?.displayName || 'Beauty Lover'}</Text>
           <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
@@ -210,10 +212,11 @@ function ProfileContent() {
               placeholderTextColor={colors.textMuted}
               style={styles.input}
             />
-            <Pressable onPress={pickProfilePhoto} style={styles.secondaryButton}>
+            <Pressable onPress={pickProfilePhoto} style={styles.secondaryButton} disabled={saving}>
               <Camera width={16} height={16} stroke={colors.primary} />
-              <Text style={styles.secondaryButtonText}>Upload Profile Photo</Text>
+              <Text style={styles.secondaryButtonText}>{saving ? 'Saving Photo...' : 'Upload Profile Photo'}</Text>
             </Pressable>
+            {error ? <Text style={styles.profileError}>{error}</Text> : null}
           </View>
         </View>
 
@@ -228,8 +231,10 @@ function ProfileContent() {
 
         {!loaded ? (
           <Text style={styles.footerNote}>Loading your profile...</Text>
+        ) : saving ? (
+          <Text style={styles.footerNote}>Saving your synced profile...</Text>
         ) : (
-          <Text style={styles.footerNote}>Profile preferences are stored locally on this device.</Text>
+          <Text style={styles.footerNote}>Profile details sync with your signed-in account.</Text>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -449,6 +454,11 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
   },
   authError: {
+    ...typography.smallBold,
+    color: colors.error,
+    marginTop: spacing.md,
+  },
+  profileError: {
     ...typography.smallBold,
     color: colors.error,
     marginTop: spacing.md,
