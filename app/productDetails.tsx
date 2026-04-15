@@ -370,7 +370,7 @@ export default function ProductDetailsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
@@ -398,9 +398,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.pink,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   headerBtn: {
     padding: spacing.sm,
@@ -456,8 +456,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     borderRadius: radius.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.primary,
     overflow: 'hidden',
     ...shadows.md,
   },
@@ -468,9 +468,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.86)',
+    borderColor: colors.primary,
   },
   matchPillText: {
     ...typography.smallBold,
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '800',
     color: colors.primary,
-    letterSpacing: -1,
+    letterSpacing: 0,
     lineHeight: 68,
   },
   matchPercent: {
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   },
   matchLabel: {
     ...typography.captionBold,
-    color: colors.textSecondary,
+    color: colors.text,
     marginTop: 2,
   },
   savingsRow: {
@@ -525,10 +525,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.bodyBold,
-    color: colors.text,
+    color: colors.primary,
     marginHorizontal: spacing.lg,
     marginTop: spacing.xl,
     marginBottom: spacing.md,
+    textTransform: 'uppercase',
   },
   comparisonRow: {
     flexDirection: 'row',
@@ -537,11 +538,11 @@ const styles = StyleSheet.create({
   },
   productCard: {
     flex: 1,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   productImage: {
@@ -563,7 +564,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   originalBadge: {
-    backgroundColor: colors.accentLight,
+    backgroundColor: colors.lime,
     borderWidth: 1,
     borderColor: colors.borderAccent,
   },
@@ -571,12 +572,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   dupeBadge: {
-    backgroundColor: colors.successLight,
+    backgroundColor: colors.accentLight,
     borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.25)',
+    borderColor: colors.accent,
   },
   dupeBadgeText: {
-    color: colors.success,
+    color: colors.accentDark,
   },
   productBrand: {
     ...typography.small,
@@ -641,20 +642,20 @@ const styles = StyleSheet.create({
   reasonsBox: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     ...shadows.sm,
     gap: spacing.md,
   },
   factsBox: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.sm,
     gap: spacing.md,
   },

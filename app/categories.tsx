@@ -41,14 +41,10 @@ export default function CategoriesScreen() {
                     })
                   }
                 >
-                  <LinearGradient
-                    colors={[cat.color, '#f7d9e3']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.cardGradient}
-                  >
-                    <Text style={styles.cardText}>{cat.name}</Text>
-                  </LinearGradient>
+                  <View style={[styles.cardGradient, { backgroundColor: cat.color }]}>
+                    <Text style={[styles.cardText, cat.id === 'other' && styles.cardTextDark]}>{cat.name}</Text>
+                    <Text style={[styles.cardStar, cat.id === 'other' && styles.cardStarDark]}>*</Text>
+                  </View>
                 </Pressable>
               </Animated.View>
             ))
@@ -70,17 +66,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.pink,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(235,66,19,0.2)',
   },
   backBtn: {
     padding: spacing.sm,
     borderRadius: radius.md,
   },
   title: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.primary,
+    textTransform: 'uppercase',
   },
   content: {
     flex: 1,
@@ -91,7 +88,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   card: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     ...shadows.md,
   },
@@ -101,13 +98,31 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     height: 124,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   cardText: {
     ...typography.h2,
+    color: colors.text,
+    textTransform: 'uppercase',
+    zIndex: 1,
+  },
+  cardTextDark: {
+    color: colors.surface,
+  },
+  cardStar: {
+    position: 'absolute',
+    right: spacing.xl,
+    bottom: -4,
+    fontSize: 76,
     color: colors.primary,
+    lineHeight: 82,
+  },
+  cardStarDark: {
+    color: colors.lime,
   },
 });

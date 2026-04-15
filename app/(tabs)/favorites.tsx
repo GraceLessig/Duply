@@ -135,13 +135,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.pink,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   title: {
     ...typography.h3,
     color: colors.primary,
+    textTransform: 'uppercase',
   },
   subtitle: {
     ...typography.small,
@@ -152,7 +153,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.lime,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   clearText: {
     ...typography.smallBold,
@@ -163,7 +166,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.gradientStart,
+    backgroundColor: colors.background,
   },
   emptyState: {
     alignItems: 'center',
@@ -173,7 +176,9 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xl,
@@ -209,12 +214,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   cardImage: {
@@ -237,7 +242,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   comparisonBadge: {
-    backgroundColor: '#fff3a8',
+    backgroundColor: colors.lime,
   },
   productBadge: {
     backgroundColor: colors.accentLight,

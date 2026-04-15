@@ -1,52 +1,56 @@
 import { Platform, StyleSheet } from 'react-native';
 
 export const colors = {
-  primary: '#820933',
-  primaryLight: '#a8123f',
-  accent: '#ff99a0',
-  accentLight: '#ffe1e4',
-  accentDark: '#e57373',
+  primary: '#EB4213',
+  primaryLight: '#ff6b3b',
+  accent: '#826DEE',
+  accentLight: '#f0edff',
+  accentDark: '#6d56db',
+  pink: '#FF99DC',
+  lime: '#D8F382',
+  red: '#EB4213',
+  purple: '#826DEE',
 
-  gradientStart: '#fff8fb',
-  gradientMid: '#ffe7ef',
-  gradientEnd: '#ffd2df',
+  gradientStart: '#FF99DC',
+  gradientMid: '#ffb5e6',
+  gradientEnd: '#D8F382',
 
-  background: '#fffaf7',
-  surface: '#ffffff',
-  surfaceElevated: '#fffdfc',
+  background: '#FF99DC',
+  surface: '#fff7fd',
+  surfaceElevated: '#fff0fb',
 
-  text: '#2a1830',
-  textSecondary: '#6b7280',
-  textMuted: '#9ca3af',
+  text: '#331029',
+  textSecondary: '#6b305b',
+  textMuted: '#8d5d80',
   textOnPrimary: '#ffffff',
-  textOnAccent: '#820933',
+  textOnAccent: '#331029',
 
-  success: '#10b981',
-  successLight: '#d1fae5',
-  warning: '#f59e0b',
-  error: '#ef4444',
+  success: '#617315',
+  successLight: '#eefbbb',
+  warning: '#EB4213',
+  error: '#c91f22',
 
-  border: '#f7d9e3',
-  borderAccent: '#ff99a0',
-  divider: '#f4dde6',
+  border: 'rgba(235,66,19,0.18)',
+  borderAccent: '#EB4213',
+  divider: 'rgba(130,109,238,0.18)',
 
   overlay: 'rgba(0,0,0,0.3)',
-  cardShadow: 'rgba(130, 9, 51, 0.12)',
+  cardShadow: 'rgba(235, 66, 19, 0.18)',
 
-  tabInactive: '#9ca3af',
-  tabActive: '#820933',
-  tabActiveBg: '#ffe4eb',
+  tabInactive: '#8d5d80',
+  tabActive: '#EB4213',
+  tabActiveBg: '#D8F382',
 
-  skeleton: '#f8e9ee',
-  skeletonHighlight: '#f3d9e2',
+  skeleton: '#ffc4ea',
+  skeletonHighlight: '#ffe7f6',
 } as const;
 
 export const gradients = {
-  main: [colors.gradientStart, colors.gradientMid, colors.gradientEnd] as const,
-  hero: ['#ffdce8', '#ffb9cf', '#ff8fb2'] as const,
-  header: ['#ec4899', '#a855f7'] as const,
-  card: ['#ffffff', '#fff5f8'] as const,
-  matchScore: ['#fff8fb', '#ffe1e4', '#ff99a0'] as const,
+  main: [colors.pink, '#ffc1e9', colors.lime] as const,
+  hero: [colors.pink, '#ffb1e4', colors.lime] as const,
+  header: [colors.pink, colors.lime] as const,
+  card: ['#fff7fd', '#fff0fb'] as const,
+  matchScore: [colors.lime, '#f2ffb5', colors.pink] as const,
 } as const;
 
 export const spacing = {
@@ -71,12 +75,12 @@ export const typography = {
   hero: {
     fontSize: 34,
     fontWeight: '800' as const,
-    letterSpacing: -0.9,
+    letterSpacing: 0,
   },
   h1: {
     fontSize: 28,
     fontWeight: '700' as const,
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
   h2: {
     fontSize: 24,

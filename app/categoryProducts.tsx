@@ -1,12 +1,21 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Search } from 'react-native-feather';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ArrowDown, ArrowLeft, Search, Star } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductsByCategory } from '../hooks/useProducts';
+
+type SortOption = 'az' | 'priceLow' | 'priceHigh' | 'popular';
+
+const sortOptions: { id: SortOption; label: string }[] = [
+  { id: 'az', label: 'A-Z' },
+  { id: 'priceLow', label: '$ Low' },
+  { id: 'priceHigh', label: '$ High' },
+  { id: 'popular', label: 'Popular' },
+];
 
 export default function CategoryProductsScreen() {
   const router = useRouter();
@@ -14,17 +23,14 @@ export default function CategoryProductsScreen() {
   const category = params.category || '';
   const title = params.title || 'Category';
   const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('popular');
   const { data: products, loading, error } = useProductsByCategory(category);
 
   const filteredProducts = useMemo(() => {
     const items = products || [];
     const normalizedQuery = query.trim().toLowerCase();
 
-    if (!normalizedQuery) {
-      return items;
-    }
-
-    return items.filter(product => {
+    const filtered = normalizedQuery ? items.filter(product => {
       const brand = product.brand.toLowerCase();
       const name = product.name.toLowerCase();
       const productType = product.productType.toLowerCase();
@@ -33,8 +39,23 @@ export default function CategoryProductsScreen() {
         name.includes(normalizedQuery) ||
         productType.includes(normalizedQuery)
       );
+    }) : items;
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'priceLow') {
+        return a.price - b.price || a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'priceHigh') {
+        return b.price - a.price || a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'popular') {
+        const aPopularity = (a.numberOfReviews || 0) + (a.rating || 0) * 100;
+        const bPopularity = (b.numberOfReviews || 0) + (b.rating || 0) * 100;
+        return bPopularity - aPopularity || a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name) || a.brand.localeCompare(b.brand);
     });
-  }, [products, query]);
+  }, [products, query, sortBy]);
 
   const openProduct = (id: string, name: string) => {
     router.push({
@@ -67,6 +88,43 @@ export default function CategoryProductsScreen() {
           placeholderTextColor={colors.textMuted}
           style={styles.searchInput}
         />
+      </View>
+
+      <View style={styles.sortBlock}>
+        <View style={styles.sortLabelRow}>
+          <ArrowDown width={16} height={16} stroke={colors.primary} />
+          <Text style={styles.sortLabel}>Sort products</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sortOptions}
+        >
+          {sortOptions.map(option => {
+            const active = sortBy === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => setSortBy(option.id)}
+                style={({ pressed }) => [
+                  styles.sortChip,
+                  active && styles.sortChipActive,
+                  pressed && styles.sortChipPressed,
+                ]}
+              >
+                {option.id === 'popular' ? (
+                  <Star
+                    width={13}
+                    height={13}
+                    stroke={active ? colors.textOnPrimary : colors.primary}
+                    fill={active ? colors.textOnPrimary : 'transparent'}
+                  />
+                ) : null}
+                <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -130,9 +188,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.pink,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(235,66,19,0.2)',
   },
   backBtn: {
     padding: spacing.sm,
@@ -143,8 +201,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.primary,
+    textTransform: 'uppercase',
   },
   subtitle: {
     ...typography.small,
@@ -153,6 +212,7 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     margin: spacing.lg,
+    marginBottom: spacing.md,
     position: 'relative',
     justifyContent: 'center',
   },
@@ -166,11 +226,57 @@ const styles = StyleSheet.create({
     paddingLeft: 40,
     paddingRight: spacing.md,
     borderWidth: 1,
-    borderColor: colors.accentLight,
+    borderColor: colors.primary,
     borderRadius: radius.full,
-    color: colors.primary,
+    color: colors.text,
     ...typography.body,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: colors.surface,
+  },
+  sortBlock: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  sortLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  sortLabel: {
+    ...typography.smallBold,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sortOptions: {
+    gap: spacing.sm,
+    paddingRight: spacing.lg,
+  },
+  sortChip: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  sortChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  sortChipPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
+  },
+  sortChipText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  sortChipTextActive: {
+    color: colors.textOnPrimary,
   },
   loadingWrap: {
     paddingHorizontal: spacing.lg,
@@ -182,12 +288,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   cardPressed: {
@@ -214,7 +320,7 @@ const styles = StyleSheet.create({
   },
   brand: {
     ...typography.small,
-    color: colors.primary,
+    color: colors.accentDark,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -232,7 +338,7 @@ const styles = StyleSheet.create({
   },
   type: {
     ...typography.small,
-    color: colors.accentDark,
+    color: colors.primary,
     textTransform: 'capitalize',
     flex: 1,
   },

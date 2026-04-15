@@ -64,11 +64,11 @@ export default function ProductCard({
 const styles = StyleSheet.create({
   card: {
     width: 170,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     overflow: 'visible',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.65)',
+    borderWidth: 2,
+    borderColor: colors.primary,
     ...shadows.md,
   },
   pressed: {
@@ -79,8 +79,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 128,
     backgroundColor: colors.skeleton,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
   },
   imagePlaceholder: {
     alignItems: 'center',
@@ -110,17 +110,17 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.accentLight,
+    backgroundColor: colors.lime,
     paddingHorizontal: spacing.sm,
     paddingVertical: 5,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.borderAccent,
+    borderColor: colors.primary,
     marginBottom: spacing.sm,
   },
   matchText: {
     ...typography.smallBold,
-    color: colors.primary,
+    color: colors.accentDark,
   },
   priceRow: {
     flexDirection: 'row',

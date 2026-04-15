@@ -34,7 +34,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
         <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
-        <Text style={styles.brand}>düply</Text>
+        <Text style={styles.brand}>duply</Text>
         <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
           <Menu width={24} height={24} stroke={colors.primary} />
         </Pressable>
@@ -212,7 +212,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -220,14 +220,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(247,217,227,0.75)',
+    backgroundColor: colors.pink,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   menuBtn: {
     padding: spacing.sm,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.lime,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   brandLogo: {
     width: 44,
@@ -252,16 +254,18 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
+    borderBottomWidth: 2,
+    borderColor: colors.primary,
   },
   kicker: {
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.66)',
+    backgroundColor: colors.lime,
     borderRadius: radius.full,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
+    borderColor: colors.primary,
   },
   kickerText: {
     ...typography.smallBold,
@@ -272,7 +276,7 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 42,
     fontWeight: '800',
-    letterSpacing: -1.2,
+    letterSpacing: 0,
     color: colors.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -295,27 +299,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: colors.surface,
     borderRadius: radius.full,
     paddingVertical: 18,
     paddingHorizontal: spacing.xl,
     width: '100%',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.lg,
   },
   searchInput: {
     flex: 1,
     ...typography.body,
-    color: colors.primary,
+    color: colors.text,
     padding: 0,
   },
   suggestionsPanel: {
     marginTop: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: colors.surface,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: 'rgba(247,217,227,0.9)',
+    borderColor: colors.primary,
     maxHeight: 320,
     overflow: 'hidden',
     ...shadows.lg,
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
   },
   suggestionPrice: {
     ...typography.captionBold,
-    color: colors.success,
+    color: colors.primary,
   },
   section: {
     paddingTop: spacing.xxl,
@@ -388,7 +392,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.text,
+    color: colors.primary,
+    textTransform: 'uppercase',
   },
   horizontalList: {
     paddingHorizontal: spacing.lg,
@@ -397,9 +402,9 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     padding: spacing.xl,
     borderRadius: radius.xl,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   emptyActivityTitle: {
@@ -428,9 +433,9 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     padding: spacing.xl,
     borderRadius: radius.xl,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   installTitle: {
@@ -439,7 +444,7 @@ const styles = StyleSheet.create({
   },
   installBody: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.text,
     marginTop: spacing.sm,
     lineHeight: 20,
   },
@@ -459,9 +464,9 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     padding: spacing.xl,
     borderRadius: radius.xl,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   disclaimerTitle: {

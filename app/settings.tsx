@@ -104,9 +104,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.pink,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   backBtn: {
     padding: spacing.sm,
@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h3,
     color: colors.primary,
+    textTransform: 'uppercase',
   },
   scroll: {
     padding: spacing.lg,
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     overflow: 'hidden',
   },
   divider: {

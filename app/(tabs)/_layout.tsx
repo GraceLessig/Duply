@@ -57,8 +57,8 @@ export default function TabLayout() {
 const tabStyles = StyleSheet.create({
   bar: {
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: 2,
+    borderTopColor: colors.primary,
     height: Platform.OS === 'ios' ? 88 : 64,
     paddingTop: spacing.sm,
     ...Platform.select({
@@ -81,9 +81,11 @@ const tabStyles = StyleSheet.create({
   },
   iconWrap: {
     padding: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
   },
   iconWrapActive: {
     backgroundColor: colors.tabActiveBg,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
 });

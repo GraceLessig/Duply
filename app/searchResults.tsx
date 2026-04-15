@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
@@ -158,9 +158,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.pink,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   backBtn: {
     padding: spacing.sm,
@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.bodyBold,
     color: colors.primary,
+    textTransform: 'uppercase',
   },
   headerSub: {
     ...typography.small,
@@ -224,6 +225,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   imageBox: {
@@ -243,7 +246,8 @@ const styles = StyleSheet.create({
   },
   brand: {
     ...typography.small,
-    color: colors.textMuted,
+    color: colors.accentDark,
+    textTransform: 'uppercase',
   },
   name: {
     ...typography.captionBold,
@@ -255,10 +259,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   matchBadge: {
-    backgroundColor: colors.accentLight,
+    backgroundColor: colors.lime,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   matchText: {
     ...typography.small,
@@ -275,7 +281,7 @@ const styles = StyleSheet.create({
   },
   dupePrice: {
     ...typography.bodyBold,
-    color: colors.success,
+    color: colors.primary,
   },
   origPrice: {
     ...typography.small,
@@ -285,7 +291,7 @@ const styles = StyleSheet.create({
   },
   savingsText: {
     ...typography.small,
-    color: colors.success,
+    color: colors.primary,
     fontWeight: '600',
     marginTop: 2,
   },

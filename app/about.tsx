@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     fontSize: 40,
     fontWeight: '800',
     color: colors.primary,
-    letterSpacing: -1,
+    letterSpacing: 0,
   },
   version: {
     ...typography.caption,

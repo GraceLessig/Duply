@@ -78,7 +78,7 @@ function LegacyProfileContent() {
             <View style={styles.statsRow}>
               <StatItem icon={Bookmark} value={savedItems} label="Saved" bg={colors.accentLight} color={colors.primary} />
               <StatItem icon={DollarSign} value={`$${totalSavings.toFixed(0)}`} label="Savings" bg={colors.successLight} color={colors.success} />
-              <StatItem icon={Star} value={savedComparisons} label="Comparisons" bg="#fff3a8" color="#8a4b00" />
+              <StatItem icon={Star} value={savedComparisons} label="Comparisons" bg={colors.lime} color={colors.primary} />
             </View>
             <Text style={styles.statsCaption}>
               {savedProducts} saved product page{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe comparison{savedComparisons === 1 ? '' : 's'}
@@ -255,11 +255,11 @@ const styles = StyleSheet.create({
   lockedCard: {
     marginHorizontal: spacing.lg,
     marginTop: -28,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: colors.primary,
     ...shadows.md,
   },
   lockedCardTitle: {
@@ -289,11 +289,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   statsCard: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: colors.primary,
     ...shadows.md,
   },
   statsRow: {
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...typography.h3,
-    color: colors.text,
+    color: colors.primary,
   },
   statLabel: {
     ...typography.small,
@@ -333,15 +333,15 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.bodyBold,
-    color: colors.text,
+    color: colors.primary,
     marginBottom: spacing.md,
   },
   card: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: colors.primary,
     ...shadows.sm,
   },
   fieldLabel: {
