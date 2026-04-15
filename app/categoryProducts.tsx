@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.pink,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(235,66,19,0.2)',
+    borderBottomColor: colors.primary,
   },
   backBtn: {
     padding: spacing.sm,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     ...typography.smallBold,
     color: colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   sortOptions: {
     gap: spacing.sm,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.accentDark,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   name: {
     ...typography.captionBold,

@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: spacing.lg,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0,
   },
   heroName: {
     ...typography.h3,
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     ...typography.smallBold,
     color: colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0,
   },
   matchScoreRow: {
     flexDirection: 'row',
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   labelText: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   originalBadge: {
     backgroundColor: colors.lime,

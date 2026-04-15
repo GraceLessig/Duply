@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.pink,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(235,66,19,0.2)',
+    borderBottomColor: colors.primary,
   },
   backBtn: {
     padding: spacing.sm,

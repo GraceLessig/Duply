@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -23,7 +23,7 @@ export default function MatchBadge({ percent, size = 'sm', animate = false }: Ma
       scale.value = withSpring(1, { damping: 12, stiffness: 100 });
       displayValue.value = withTiming(percent, { duration: 800 });
     }
-  }, [percent, animate]);
+  }, [animate, displayValue, percent, scale]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

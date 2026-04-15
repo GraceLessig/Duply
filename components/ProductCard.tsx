@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0,
   },
   name: {
     ...typography.captionBold,

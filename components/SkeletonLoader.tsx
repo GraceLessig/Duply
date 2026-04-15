@@ -20,7 +20,7 @@ export function Skeleton({ width = '100%', height = 16, borderRadius = radius.sm
 
   useEffect(() => {
     opacity.value = withRepeat(withTiming(1, { duration: 800 }), -1, true);
-  }, []);
+  }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,11 +19,7 @@ export default function SearchResultsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sourceProduct, setSourceProduct] = useState<Product | null>(null);
 
-  useEffect(() => {
-    loadDupes();
-  }, [params.productId, params.q]);
-
-  async function loadDupes() {
+  const loadDupes = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -50,7 +46,11 @@ export default function SearchResultsScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [params.productId, params.q]);
+
+  useEffect(() => {
+    loadDupes();
+  }, [loadDupes]);
 
   const renderItem = ({ item, index }: { item: Dupe; index: number }) => (
     <Animated.View entering={FadeInRight.delay(index * 80).duration(400)}>

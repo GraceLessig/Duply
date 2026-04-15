@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     ...typography.smallBold,
     color: colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    letterSpacing: 0,
   },
   heading: {
     fontSize: 42,
