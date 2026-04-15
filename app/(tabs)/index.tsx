@@ -40,7 +40,12 @@ export default function HomeScreen() {
         >
           <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
         </Pressable>
-        <Text style={styles.brand}>düply</Text>
+        <Image
+          source={require('../../assets/images/duply-wordmark.png')}
+          style={styles.brandWordmark}
+          contentFit="contain"
+          accessibilityLabel={"d\u00fcply"}
+        />
         <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
           <Menu width={24} height={24} stroke={colors.primary} />
         </Pressable>
@@ -250,11 +255,11 @@ const styles = StyleSheet.create({
     opacity: 0.72,
     transform: [{ scale: 0.96 }],
   },
-  brand: {
-    ...typography.hero,
-    color: colors.originalRed,
+  brandWordmark: {
     flex: 1,
-    textAlign: 'center',
+    height: 54,
+    maxWidth: 220,
+    marginHorizontal: spacing.md,
   },
   scrollContent: {
     paddingBottom: spacing.xxxl,
