@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FirebaseError } from 'firebase/app';
 import { deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
@@ -58,6 +59,36 @@ function fileExtension(mimeType?: string) {
   if (mimeType?.includes('png')) return 'png';
   if (mimeType?.includes('webp')) return 'webp';
   return 'jpg';
+}
+
+function profileErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof FirebaseError) {
+    if (error.code === 'storage/unauthorized' || error.code === 'permission-denied') {
+      return 'Firebase blocked this profile update. Check your Firestore and Storage rules.';
+    }
+    if (error.code === 'storage/bucket-not-found') {
+      return 'Firebase Storage bucket was not found. Check EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET.';
+    }
+    return `${fallback} (${error.code})`;
+  }
+
+  return fallback;
+}
+
+async function uriToBlob(uri: string) {
+  try {
+    const response = await fetch(uri);
+    return await response.blob();
+  } catch {
+    return await new Promise<Blob>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.onload = () => resolve(request.response);
+      request.onerror = () => reject(new Error('profile-photo-read-failed'));
+      request.responseType = 'blob';
+      request.open('GET', uri, true);
+      request.send(null);
+    });
+  }
 }
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
@@ -146,8 +177,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         email: user.email || '',
         updatedAt: serverTimestamp(),
       }, { merge: true });
-    } catch {
-      setError('Could not save your synced profile right now.');
+    } catch (err) {
+      setError(profileErrorMessage(err, 'Could not save your synced profile right now.'));
     } finally {
       setSaving(false);
     }
@@ -165,6 +196,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const uploadProfilePhoto = useCallback(async (uri: string, mimeType?: string) => {
     const uid = user?.uid;
     if (!uid || !firebaseStorage) {
+      setError(!uid ? 'Sign in before uploading a profile photo.' : 'Firebase Storage is not configured for uploads.');
       updateProfile({ photoUri: uri });
       return;
     }
@@ -172,16 +204,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const blob = await uriToBlob(uri);
       const uploadType = mimeType || blob.type || 'image/jpeg';
-      const imageRef = ref(firebaseStorage, `profilePhotos/${uid}/avatar.${fileExtension(uploadType)}`);
+      const imageRef = ref(firebaseStorage, `profilePhotos/${uid}/avatar-${Date.now()}.${fileExtension(uploadType)}`);
 
       await uploadBytes(imageRef, blob, { contentType: uploadType });
       const downloadUrl = await getDownloadURL(imageRef);
       updateProfile({ photoUri: downloadUrl });
-    } catch {
-      setError('Could not upload your profile photo right now.');
+    } catch (err) {
+      setError(profileErrorMessage(err, 'Could not upload your profile photo right now.'));
     } finally {
       setSaving(false);
     }
@@ -195,8 +226,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     const uid = user?.uid;
     const remoteDoc = uid ? profileDoc(uid) : null;
     if (remoteDoc) {
-      deleteDoc(remoteDoc).catch(() => {
-        setError('Could not reset your synced profile right now.');
+      deleteDoc(remoteDoc).catch(err => {
+        setError(profileErrorMessage(err, 'Could not reset your synced profile right now.'));
       });
     }
   }, [fallbackProfile, persist, user?.uid]);

@@ -38,7 +38,7 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.lockedTitle}>Create Your Profile</Text>
           <Text style={styles.lockedSubtitle}>
-            Sign in to save your preferences, keep your dashboard tidy, and make dÃ¼ply feel more personal.
+            Sign in to save your preferences, keep your dashboard tidy, and make {'d\u00fcply'} feel more personal.
           </Text>
         </View>
 
@@ -153,13 +153,11 @@ function ProfileContent() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
-      base64: true,
     });
 
     const asset = result.canceled ? null : result.assets[0];
     if (asset?.uri) {
-      const photoUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri;
-      await uploadProfilePhoto(photoUri, asset.mimeType);
+      await uploadProfilePhoto(asset.uri, asset.mimeType);
     }
   };
 
@@ -260,7 +258,7 @@ function SettingsRow({ icon: Icon, label, onPress, danger }: any) {
         <Icon width={20} height={20} stroke={danger ? colors.error : colors.textMuted} />
         <Text style={[styles.settingsText, danger && { color: colors.error }]}>{label}</Text>
       </View>
-      <Text style={styles.chevron}>›</Text>
+      <Text style={styles.chevron}>{'\u203a'}</Text>
     </Pressable>
   );
 }
