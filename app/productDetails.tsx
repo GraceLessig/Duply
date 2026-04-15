@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   originalBadge: {
-    backgroundColor: colors.lime,
+    backgroundColor: colors.yellow,
     borderWidth: 2,
     borderColor: colors.borderAccent,
   },

@@ -8,11 +8,11 @@ export const colors = {
   accentLight: '#FFE07A',
   accentDark: '#7A2400',
   pink: '#FFD1E8',
-  lime: '#FFE07A',
+  yellow: '#FFE07A',
   red: '#B00020',
   purple: '#7A1548',
   rose: '#D61F69',
-  softSky: '#FFE7A6',
+  softGold: '#FFE7A6',
   wine: '#2A0B26',
   clottedCream: '#FFF7FB',
   strawberryMilk: '#FFD1E8',
@@ -53,10 +53,10 @@ export const colors = {
 
 export const gradients = {
   main: [colors.background, colors.surfaceElevated, '#FFF2F8'] as const,
-  hero: [colors.lime, colors.accentLight, colors.pink] as const,
-  header: [colors.lime, colors.accentLight] as const,
+  hero: [colors.yellow, colors.accentLight, colors.pink] as const,
+  header: [colors.yellow, colors.accentLight] as const,
   card: [colors.surface, colors.surfaceElevated] as const,
-  matchScore: [colors.lime, colors.accentLight, colors.surface] as const,
+  matchScore: [colors.yellow, colors.accentLight, colors.surface] as const,
 } as const;
 
 export const spacing = {
