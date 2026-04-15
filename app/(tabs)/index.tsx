@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   brand: {
     ...typography.hero,
-    color: colors.primary,
+    color: colors.originalRed,
     flex: 1,
     textAlign: 'center',
   },
