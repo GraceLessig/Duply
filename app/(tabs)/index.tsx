@@ -90,7 +90,7 @@ export default function HomeScreen() {
                   {searchLoading ? (
                     <View style={styles.suggestionsLoading}>
                       {[1, 2, 3].map(i => (
-                        <ProductCardSkeleton key={i} />
+                        <View key={i} style={styles.suggestionSkeleton} />
                       ))}
                     </View>
                   ) : searchError ? (
@@ -340,6 +340,12 @@ const styles = StyleSheet.create({
   },
   suggestionsLoading: {
     padding: spacing.md,
+    gap: spacing.sm,
+  },
+  suggestionSkeleton: {
+    height: 54,
+    borderRadius: radius.lg,
+    backgroundColor: colors.skeleton,
   },
   suggestionsList: {
     maxHeight: 320,

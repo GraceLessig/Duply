@@ -129,6 +129,10 @@ export async function findPriceMatchesFromBackend(product: Product): Promise<Pri
 
   const text = await response.text();
 
+  if (response.status === 404 || response.status === 405) {
+    return [];
+  }
+
   if (!response.ok) {
     throw new Error(`Backend error ${response.status}: ${text}`);
   }

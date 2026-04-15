@@ -263,21 +263,6 @@ def get_products_by_category(category_or_type: str):
     ]
 
 
-@app.get("/products/{product_id}")
-def get_product(product_id: str):
-    if product_id.startswith("web-"):
-        product = get_web_product_by_id(product_id)
-        if not product:
-            raise HTTPException(status_code=404, detail="Web product expired from cache")
-        return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
-
-    product = get_firestore_product_by_id(product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
-
-
 @app.post("/products/price-matches")
 async def get_price_matches(request: Request):
     try:
@@ -294,6 +279,21 @@ async def get_price_matches(request: Request):
     except Exception as e:
         print("Error in /products/price-matches:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/products/{product_id}")
+def get_product(product_id: str):
+    if product_id.startswith("web-"):
+        product = get_web_product_by_id(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Web product expired from cache")
+        return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+
+    product = get_firestore_product_by_id(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
 
 
 @app.post("/dupes")

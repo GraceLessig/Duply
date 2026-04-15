@@ -1,10 +1,8 @@
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Clock, Search, X } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useActivity } from '../hooks/useActivity';
 import { useSearch } from '../hooks/useProducts';
@@ -69,7 +67,7 @@ export default function SearchScreen() {
         {loading ? (
           <View style={styles.suggestionsLoading}>
             {[1, 2, 3].map(i => (
-              <ProductCardSkeleton key={i} />
+              <View key={i} style={styles.resultSkeleton} />
             ))}
           </View>
         ) : error ? (
@@ -90,13 +88,6 @@ export default function SearchScreen() {
                 style={({ pressed }) => [styles.resultItem, pressed && styles.resultItemPressed]}
                 onPress={() => openProduct(item.id, item.name)}
               >
-                {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.resultImage} contentFit="cover" />
-                ) : (
-                  <View style={[styles.resultImage, styles.resultImagePlaceholder]}>
-                    <Text style={styles.placeholderText}>Image unavailable</Text>
-                  </View>
-                )}
                 <View style={styles.resultInfo}>
                   <Text style={styles.resultBrand}>{item.brand}</Text>
                   <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
@@ -262,6 +253,12 @@ const styles = StyleSheet.create({
   },
   suggestionsLoading: {
     padding: spacing.md,
+    gap: spacing.sm,
+  },
+  resultSkeleton: {
+    height: 54,
+    borderRadius: radius.lg,
+    backgroundColor: colors.skeleton,
   },
   suggestionsList: {
     maxHeight: 320,
@@ -289,7 +286,7 @@ const styles = StyleSheet.create({
   resultDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginLeft: 76,
+    marginLeft: spacing.md,
   },
   content: {
     flex: 1,
@@ -305,26 +302,8 @@ const styles = StyleSheet.create({
   resultItemPressed: {
     opacity: 0.7,
   },
-  resultImage: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.skeleton,
-  },
-  resultImagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentLight,
-  },
-  placeholderText: {
-    ...typography.small,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xs,
-  },
   resultInfo: {
     flex: 1,
-    marginLeft: spacing.md,
   },
   resultBrand: {
     ...typography.small,
