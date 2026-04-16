@@ -19,32 +19,15 @@ import { colors, radius, shadows, spacing, typography } from '../../constants/th
 import { useActivity } from '../../hooks/useActivity';
 import { useSearch } from '../../hooks/useProducts';
 
-const CURVED_DUPLY_LETTERS = [
-  { char: 'd', left: 4, top: 31, rotate: '-18deg' },
-  { char: 'ü', left: 34, top: 16, rotate: '-9deg' },
-  { char: 'p', left: 69, top: 10, rotate: '0deg' },
-  { char: 'l', left: 103, top: 17, rotate: '8deg' },
-  { char: 'y', left: 128, top: 31, rotate: '18deg' },
-] as const;
-
-function CurvedDuplyWord() {
+function MarqueeLogo() {
   return (
-    <View style={styles.curvedWord}>
-      {CURVED_DUPLY_LETTERS.map((letter) => (
-        <Text
-          key={`${letter.char}-${letter.left}`}
-          style={[
-            styles.curvedLetter,
-            {
-              left: letter.left,
-              top: letter.top,
-              transform: [{ rotate: letter.rotate }],
-            },
-          ]}
-        >
-          {letter.char}
-        </Text>
-      ))}
+    <View style={styles.marqueeLogoFrame}>
+      <Image
+        source={require('../../assets/images/duply-wordmark.png')}
+        style={styles.marqueeLogoImage}
+        contentFit="contain"
+        accessibilityLabel={"d\u00fcply"}
+      />
     </View>
   );
 }
@@ -58,7 +41,7 @@ export default function HomeScreen() {
   const showingSuggestions = query.trim().length > 0;
   const androidAppUrl = ((Constants.expoConfig as any)?.extra?.androidAppUrl || '').trim();
   const marqueeOffset = useSharedValue(0);
-  const marqueeItemWidth = 176;
+  const marqueeItemWidth = 138;
   const marqueeRepeatCount = Math.max(6, Math.ceil(width / marqueeItemWidth) + 3);
   const marqueeTrackWidth = marqueeItemWidth * marqueeRepeatCount;
 
@@ -119,12 +102,12 @@ export default function HomeScreen() {
         <View style={styles.marqueeBand} pointerEvents="none">
           <Animated.View style={[styles.marqueeTrack, marqueeTrackStyle]}>
             {Array.from({ length: marqueeRepeatCount }, (_, index) => (
-              <CurvedDuplyWord key={`duply-track-a-${index}`} />
+              <MarqueeLogo key={`duply-track-a-${index}`} />
             ))}
           </Animated.View>
           <Animated.View style={[styles.marqueeTrack, marqueeTrackStyle, styles.marqueeTrackClone, marqueeTrackCloneStyle]}>
             {Array.from({ length: marqueeRepeatCount }, (_, index) => (
-              <CurvedDuplyWord key={`duply-track-b-${index}`} />
+              <MarqueeLogo key={`duply-track-b-${index}`} />
             ))}
           </Animated.View>
         </View>
@@ -320,8 +303,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   brandLogoFrame: {
-    width: 58,
-    height: 58,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     overflow: 'hidden',
     borderWidth: 2,
@@ -329,10 +312,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   brandLogoImage: {
-    width: 76,
-    height: 76,
-    marginLeft: -9,
-    marginTop: -9,
+    width: 44,
+    height: 44,
   },
   brandLogoPressed: {
     opacity: 0.72,
@@ -340,15 +321,15 @@ const styles = StyleSheet.create({
   },
   brandWordmark: {
     flex: 1,
-    height: 62,
-    maxWidth: 232,
+    height: 78,
+    maxWidth: 284,
     marginHorizontal: spacing.md,
   },
   scrollContent: {
     paddingBottom: spacing.xxxl,
   },
   marqueeBand: {
-    height: 86,
+    height: 50,
     overflow: 'hidden',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
@@ -364,18 +345,17 @@ const styles = StyleSheet.create({
   marqueeTrackClone: {
     left: 0,
   },
-  curvedWord: {
-    width: 176,
-    height: 78,
-    position: 'relative',
+  marqueeLogoFrame: {
+    width: 138,
+    height: 28,
+    overflow: 'hidden',
+    opacity: 0.38,
   },
-  curvedLetter: {
-    position: 'absolute',
-    fontSize: 34,
-    lineHeight: 38,
-    fontWeight: '800',
-    color: colors.primary,
-    textTransform: 'lowercase',
+  marqueeLogoImage: {
+    width: 158,
+    height: 34,
+    marginLeft: -10,
+    marginTop: -3,
   },
   hero: {
     backgroundColor: colors.accentLight,
