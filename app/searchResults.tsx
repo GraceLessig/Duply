@@ -110,7 +110,7 @@ export default function SearchResultsScreen() {
             {sourceProduct?.name || params.productName || params.q || 'Results'}
           </Text>
           {!loading && (
-            <Text style={styles.headerSub}>{dupes.length} dupes found</Text>
+            <Text style={styles.headerSub}>{dupes.length} dupes ready to compare</Text>
           )}
         </View>
         <View style={{ width: 40 }} />

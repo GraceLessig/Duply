@@ -13,9 +13,7 @@ import { useProfile } from '../../hooks/useProfile';
 function DefaultAvatar() {
   return (
     <View style={styles.defaultAvatarArt}>
-      <View style={styles.defaultAvatarHaloLarge} />
-      <View style={styles.defaultAvatarHaloSmall} />
-      <View style={styles.defaultAvatarBadge}>
+      <View style={styles.defaultAvatarRing}>
         <Image source={require('../../assets/images/duply-logo.png')} style={styles.defaultAvatarLogo} contentFit="contain" />
       </View>
     </View>
@@ -323,43 +321,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.softGold,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
-  defaultAvatarHaloLarge: {
-    position: 'absolute',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  defaultAvatarRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.pink,
-    opacity: 0.95,
-    top: 10,
-    left: 5,
-  },
-  defaultAvatarHaloSmall: {
-    position: 'absolute',
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.accentLight,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    bottom: 6,
-    right: 6,
-  },
-  defaultAvatarBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.primary,
-    zIndex: 1,
   },
   defaultAvatarLogo: {
-    width: 40,
-    height: 40,
+    width: 46,
+    height: 46,
   },
   photoButton: {
     flexDirection: 'row',

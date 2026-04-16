@@ -116,14 +116,14 @@ export default function HomeScreen() {
 
         <View style={styles.hero}>
           <View style={styles.kicker}>
-            <Text style={styles.kickerText}>Beauty finds, but cheaper</Text>
+            <Text style={styles.kickerText}>Compare beauty finds and price match them</Text>
           </View>
           <View>
             <Text style={styles.heading}>Find Your{'\n'}Perfect Dupe</Text>
           </View>
           <View>
             <Text style={styles.sub}>
-              Discover affordable alternatives to your favorite beauty products
+              Discover affordable alternatives to your favorite beauty products and scan live price-match offers.
             </Text>
           </View>
 

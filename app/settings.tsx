@@ -67,13 +67,13 @@ export default function SettingsScreen() {
           <InfoRow
             icon={Search}
             title="Dupe Engine"
-            value="FastAPI backend with model-ranked candidate retrieval"
+            value="FastAPI backend with model-ranked dupes and live price-match retrieval"
           />
           <View style={styles.divider} />
           <InfoRow
             icon={User}
-            title="Favorites"
-            value="Stored locally on this device"
+            title="Saved Items"
+            value="Product pages and comparisons saved on this device"
           />
         </View>
       </ScrollView>

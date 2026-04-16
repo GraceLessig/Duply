@@ -26,7 +26,7 @@ export default function AboutScreen() {
           <Text style={styles.version}>Version 1.0.0</Text>
           <Text style={styles.description}>
             Search products from your product catalog, open rich product pages,
-            and compare model-ranked dupes with explainable match scores.
+            compare model-ranked dupes with explainable match scores, and scan live price-match offers.
           </Text>
         </View>
 
@@ -39,7 +39,7 @@ export default function AboutScreen() {
           <View style={styles.divider} />
           <InfoRow
             title="Product Details"
-            body="Each product page can show ingredient, packaging, skin type, size, country, review count, and more."
+            body="Each product page can show ingredient, packaging, skin type, size, country, review count, and live price-match offers."
           />
           <View style={styles.divider} />
           <InfoRow

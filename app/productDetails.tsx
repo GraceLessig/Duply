@@ -245,7 +245,7 @@ export default function ProductDetailsScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>{original.name}</Text>
         <TouchableOpacity onPress={handleToggleFavorite} style={styles.headerBtn}>
           <Ionicons
-            name={isFav ? 'heart' : 'heart-outline'}
+            name={isComparisonView ? (isFav ? 'star' : 'star-outline') : (isFav ? 'heart' : 'heart-outline')}
             size={24}
             color={isFav ? colors.accent : colors.textMuted}
           />
@@ -299,11 +299,11 @@ export default function ProductDetailsScreen() {
         )}
 
         <Animated.View entering={FadeInDown.delay(175).duration(400)}>
-          <Text style={styles.sectionTitle}>Price Match</Text>
+          <Text style={styles.sectionTitle}>Price Match Results</Text>
           <View style={styles.priceMatchBox}>
             <View style={styles.priceMatchHeader}>
               <View>
-                <Text style={styles.priceMatchEyebrow}>Current lowest online</Text>
+                <Text style={styles.priceMatchEyebrow}>Top 3 live retailer offers</Text>
                 <Text style={styles.priceMatchTitle}>
                   {priceOffers[0] ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}` : 'Checking retailers'}
                 </Text>
@@ -317,7 +317,7 @@ export default function ProductDetailsScreen() {
               <Text style={styles.priceMatchEmpty}>No verified retailer offers found yet.</Text>
             ) : null}
 
-            {priceOffers.slice(0, 4).map((offer, index) => (
+            {priceOffers.slice(0, 3).map((offer, index) => (
               <TouchableOpacity
                 key={offer.id}
                 activeOpacity={0.86}
