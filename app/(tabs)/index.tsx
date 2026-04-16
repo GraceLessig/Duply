@@ -1,9 +1,16 @@
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { Menu, Search, TrendingUp } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
@@ -12,13 +19,68 @@ import { colors, radius, shadows, spacing, typography } from '../../constants/th
 import { useActivity } from '../../hooks/useActivity';
 import { useSearch } from '../../hooks/useProducts';
 
+const CURVED_DUPLY_LETTERS = [
+  { char: 'd', left: 4, top: 31, rotate: '-18deg' },
+  { char: 'ü', left: 34, top: 16, rotate: '-9deg' },
+  { char: 'p', left: 69, top: 10, rotate: '0deg' },
+  { char: 'l', left: 103, top: 17, rotate: '8deg' },
+  { char: 'y', left: 128, top: 31, rotate: '18deg' },
+] as const;
+
+function CurvedDuplyWord() {
+  return (
+    <View style={styles.curvedWord}>
+      {CURVED_DUPLY_LETTERS.map((letter) => (
+        <Text
+          key={`${letter.char}-${letter.left}`}
+          style={[
+            styles.curvedLetter,
+            {
+              left: letter.left,
+              top: letter.top,
+              transform: [{ rotate: letter.rotate }],
+            },
+          ]}
+        >
+          {letter.char}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [query, setQuery] = useState('');
   const { results, loading: searchLoading, error: searchError, search } = useSearch();
   const { recentViews, loaded: activityLoaded, addRecentSearch } = useActivity();
   const showingSuggestions = query.trim().length > 0;
   const androidAppUrl = ((Constants.expoConfig as any)?.extra?.androidAppUrl || '').trim();
+  const marqueeOffset = useSharedValue(0);
+  const marqueeItemWidth = 176;
+  const marqueeRepeatCount = Math.max(6, Math.ceil(width / marqueeItemWidth) + 3);
+  const marqueeTrackWidth = marqueeItemWidth * marqueeRepeatCount;
+
+  useEffect(() => {
+    marqueeOffset.value = 0;
+    marqueeOffset.value = withRepeat(
+      withTiming(-marqueeTrackWidth, {
+        duration: 22000,
+        easing: Easing.linear,
+      }),
+      -1,
+      false
+    );
+  }, [marqueeOffset, marqueeTrackWidth]);
+
+  const marqueeTrackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: marqueeOffset.value }],
+  }));
+
+  const marqueeTrackCloneStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: marqueeOffset.value + marqueeTrackWidth }],
+  }));
 
   const openProduct = (id: string, name: string) => {
     addRecentSearch(query);
@@ -38,7 +100,9 @@ export default function HomeScreen() {
           onPress={() => router.push('/about')}
           style={({ pressed }) => pressed && styles.brandLogoPressed}
         >
-          <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
+          <View style={styles.brandLogoFrame}>
+            <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogoImage} contentFit="contain" />
+          </View>
         </Pressable>
         <Image
           source={require('../../assets/images/duply-wordmark.png')}
@@ -52,6 +116,19 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.marqueeBand} pointerEvents="none">
+          <Animated.View style={[styles.marqueeTrack, marqueeTrackStyle]}>
+            {Array.from({ length: marqueeRepeatCount }, (_, index) => (
+              <CurvedDuplyWord key={`duply-track-a-${index}`} />
+            ))}
+          </Animated.View>
+          <Animated.View style={[styles.marqueeTrack, marqueeTrackStyle, styles.marqueeTrackClone, marqueeTrackCloneStyle]}>
+            {Array.from({ length: marqueeRepeatCount }, (_, index) => (
+              <CurvedDuplyWord key={`duply-track-b-${index}`} />
+            ))}
+          </Animated.View>
+        </View>
+
         <View style={styles.hero}>
           <View style={styles.kicker}>
             <Text style={styles.kickerText}>Beauty finds, but cheaper</Text>
@@ -242,14 +319,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
   },
-  brandLogo: {
-    width: 44,
-    height: 44,
+  brandLogoFrame: {
+    width: 58,
+    height: 58,
     borderRadius: radius.md,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.primary,
     backgroundColor: colors.surface,
+  },
+  brandLogoImage: {
+    width: 76,
+    height: 76,
+    marginLeft: -9,
+    marginTop: -9,
   },
   brandLogoPressed: {
     opacity: 0.72,
@@ -257,12 +340,42 @@ const styles = StyleSheet.create({
   },
   brandWordmark: {
     flex: 1,
-    height: 54,
-    maxWidth: 220,
+    height: 62,
+    maxWidth: 232,
     marginHorizontal: spacing.md,
   },
   scrollContent: {
     paddingBottom: spacing.xxxl,
+  },
+  marqueeBand: {
+    height: 86,
+    overflow: 'hidden',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.cream,
+    justifyContent: 'center',
+  },
+  marqueeTrack: {
+    position: 'absolute',
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  marqueeTrackClone: {
+    left: 0,
+  },
+  curvedWord: {
+    width: 176,
+    height: 78,
+    position: 'relative',
+  },
+  curvedLetter: {
+    position: 'absolute',
+    fontSize: 34,
+    lineHeight: 38,
+    fontWeight: '800',
+    color: colors.primary,
+    textTransform: 'lowercase',
   },
   hero: {
     backgroundColor: colors.accentLight,
