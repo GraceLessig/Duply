@@ -1,25 +1,38 @@
 import { Image } from 'expo-image';
-import { Link, useRouter } from 'expo-router';
-import React from 'react';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Heart, Trash2 } from 'react-native-feather';
+import { Heart, Star, Trash2 } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useFavorites } from '../../hooks/useFavorites';
 
 export default function FavoritesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ view?: string }>();
   const { favorites, loaded, removeFavorite, clearFavorites } = useFavorites();
   const productFavorites = favorites.filter(item => (item.kind || 'comparison') === 'product');
   const comparisonFavorites = favorites.filter(item => (item.kind || 'comparison') === 'comparison');
+  const [activeView, setActiveView] = useState<'favorites' | 'comparisons'>(
+    params.view === 'comparisons' ? 'comparisons' : 'favorites'
+  );
+
+  useEffect(() => {
+    setActiveView(params.view === 'comparisons' ? 'comparisons' : 'favorites');
+  }, [params.view]);
+
+  const activeItems = activeView === 'favorites' ? productFavorites : comparisonFavorites;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
         <View>
           <Text style={styles.title}>Saved</Text>
-          <Text style={styles.subtitle}>{favorites.length} saved item{favorites.length === 1 ? '' : 's'}</Text>
+          <Text style={styles.subtitle}>
+            {activeItems.length} {activeView === 'favorites' ? 'favorite' : 'comparison'}
+            {activeItems.length === 1 ? '' : 's'} saved
+          </Text>
         </View>
         {favorites.length > 0 ? (
           <Pressable onPress={clearFavorites} style={styles.clearBtn}>
@@ -49,40 +62,53 @@ export default function FavoritesScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <View style={styles.viewToggle}>
+            <Pressable
+              onPress={() => setActiveView('favorites')}
+              style={[styles.viewToggleButton, activeView === 'favorites' && styles.viewToggleButtonActive]}
+            >
+              <Heart width={16} height={16} stroke={activeView === 'favorites' ? colors.textOnPrimary : colors.primary} />
+              <Text style={[styles.viewToggleText, activeView === 'favorites' && styles.viewToggleTextActive]}>Favorites</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveView('comparisons')}
+              style={[styles.viewToggleButton, activeView === 'comparisons' && styles.viewToggleButtonActive]}
+            >
+              <Star width={16} height={16} stroke={activeView === 'comparisons' ? colors.textOnPrimary : colors.primary} />
+              <Text style={[styles.viewToggleText, activeView === 'comparisons' && styles.viewToggleTextActive]}>Comparisons</Text>
+            </Pressable>
+          </View>
+
           <SavedSection
-            title="Products"
-            subtitle={`${productFavorites.length} saved`}
-            emptyText="Tap the heart on a product page to save it here."
-            items={productFavorites}
-            removeFavorite={removeFavorite}
-            onOpen={(item) =>
-              router.push({
-                pathname: '/productDetails',
-                params: {
-                  id: item.originalId || item.id,
-                  productName: item.originalName,
-                },
-              })
+            title={activeView === 'favorites' ? 'Favorites' : 'Saved Comparisons'}
+            subtitle={`${activeItems.length} saved`}
+            emptyText={
+              activeView === 'favorites'
+                ? 'Tap the heart on a product page to save it here.'
+                : 'Tap the star on a dupe comparison page to save the full comparison here.'
             }
-          />
-          <SavedSection
-            title="Comparisons"
-            subtitle={`${comparisonFavorites.length} saved`}
-            emptyText="Tap the star on a dupe comparison page to save the full comparison here."
-            items={comparisonFavorites}
+            items={activeItems}
             removeFavorite={removeFavorite}
             onOpen={(item) =>
-              router.push({
-                pathname: '/productDetails',
-                params: {
-                  dupeId: item.id,
-                  originalId: item.originalId,
-                  dupeProductId: item.dupeProductId,
-                  similarity: String(item.similarity),
-                  matchReason: item.matchReason || '',
-                  savings: String(item.savings),
-                },
-              })
+              activeView === 'favorites'
+                ? router.push({
+                    pathname: '/productDetails',
+                    params: {
+                      id: item.originalId || item.id,
+                      productName: item.originalName,
+                    },
+                  })
+                : router.push({
+                    pathname: '/productDetails',
+                    params: {
+                      dupeId: item.id,
+                      originalId: item.originalId,
+                      dupeProductId: item.dupeProductId,
+                      similarity: String(item.similarity),
+                      matchReason: item.matchReason || '',
+                      savings: String(item.savings),
+                    },
+                  })
             }
           />
         </ScrollView>
@@ -272,6 +298,35 @@ const styles = StyleSheet.create({
   list: {
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    padding: 4,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentLight,
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  viewToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+  },
+  viewToggleButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  viewToggleText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
+  viewToggleTextActive: {
+    color: colors.textOnPrimary,
   },
   section: {
     marginBottom: spacing.xl,

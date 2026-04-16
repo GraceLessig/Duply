@@ -11,18 +11,18 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
         tabBarStyle: tabStyles.bar,
         tabBarItemStyle: tabStyles.item,
+        tabBarLabelStyle: tabStyles.label,
         animation: 'shift',
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: '',
+          title: 'Home',
           tabBarAccessibilityLabel: 'Home',
-          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <Home width={22} height={22} stroke={color} />
@@ -33,9 +33,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          title: '',
-          tabBarAccessibilityLabel: 'Favorites',
-          tabBarLabel: () => null,
+          title: 'Saved',
+          tabBarAccessibilityLabel: 'Saved',
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <Heart width={22} height={22} stroke={color} />
@@ -46,9 +45,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: '',
+          title: 'Profile',
           tabBarAccessibilityLabel: 'Profile',
-          tabBarLabel: () => null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <User width={22} height={22} stroke={color} />
@@ -80,6 +78,11 @@ const tabStyles = StyleSheet.create({
   item: {
     paddingVertical: spacing.xs,
     paddingBottom: spacing.sm,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: Platform.OS === 'ios' ? spacing.sm : spacing.xs,
   },
   iconWrap: {
     padding: spacing.sm,

@@ -206,6 +206,22 @@ function ProfileContent() {
             <Text style={styles.statsCaption}>
               {savedProducts} saved product page{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe comparison{savedComparisons === 1 ? '' : 's'}
             </Text>
+            <View style={styles.savedLinksRow}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/favorites', params: { view: 'favorites' } } as Href)}
+                style={styles.savedLinkButton}
+              >
+                <Bookmark width={16} height={16} stroke={colors.primary} />
+                <Text style={styles.savedLinkText}>Favorites</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push({ pathname: '/favorites', params: { view: 'comparisons' } } as Href)}
+                style={styles.savedLinkButton}
+              >
+                <Star width={16} height={16} stroke={colors.primary} />
+                <Text style={styles.savedLinkText}>Comparisons</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -552,6 +568,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.md,
     textAlign: 'center',
+  },
+  savedLinksRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  savedLinkButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentLight,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  savedLinkText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   section: {
     paddingHorizontal: spacing.lg,
