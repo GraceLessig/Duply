@@ -478,9 +478,13 @@ def _is_blocked_marketplace_domain(domain):
 
 def _is_approved_retailer_domain(domain):
     domain = str(domain or "").lower()
-    if not domain or _is_blocked_marketplace_domain(domain):
+    if not domain:
         return False
-    return any(domain == approved or domain.endswith(f".{approved}") for approved in APPROVED_RETAILER_DOMAINS)
+    if _is_blocked_marketplace_domain(domain):
+        return False
+    if any(domain == approved or domain.endswith(f".{approved}") for approved in APPROVED_RETAILER_DOMAINS):
+        return True
+    return "." in domain
 
 
 def _is_approved_retailer_url(url):

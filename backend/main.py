@@ -188,6 +188,9 @@ def _build_match_reason(original_source, dupe_source):
     if _normalize_text(original["packaging_type"]) and _normalize_text(original["packaging_type"]) == _normalize_text(dupe["packaging_type"]):
         reasons.append("same packaging")
 
+    if _normalize_text(original["product_size"]) and _normalize_text(original["product_size"]) == _normalize_text(dupe["product_size"]):
+        reasons.append("same size")
+
     if original["price"] > 0 and dupe["price"] > 0:
         relative_diff = abs(original["price"] - dupe["price"]) / max(original["price"], dupe["price"])
         if relative_diff <= 0.15:
@@ -199,7 +202,18 @@ def _build_match_reason(original_source, dupe_source):
         reasons.append("similar rating")
 
     if not reasons:
-        return "Matched on closest overall product attributes"
+        grounded_fallback = []
+        if _normalize_text(original["product_type"]) and _normalize_text(dupe["product_type"]):
+            grounded_fallback.append("product type")
+        if original["price"] > 0 and dupe["price"] > 0:
+            grounded_fallback.append("price")
+        if original["rating"] > 0 and dupe["rating"] > 0:
+            grounded_fallback.append("rating")
+
+        if grounded_fallback:
+            return f"Matched using available {', '.join(grounded_fallback[:3])} data"
+
+        return "Matched using available product data"
 
     return ", ".join(reasons[:3])
 

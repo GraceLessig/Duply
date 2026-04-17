@@ -1,11 +1,19 @@
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInRight } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeInRight,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ProductCardSkeleton } from '../components/SkeletonLoader';
+import { ProductCardSkeleton, Skeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import type { Dupe, Product } from '../services/api';
 import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
@@ -18,6 +26,27 @@ export default function SearchResultsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sourceProduct, setSourceProduct] = useState<Product | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingProgress = useSharedValue(0);
+
+  const loadingSteps = useMemo(() => ([
+    {
+      title: 'Finding the source product',
+      detail: 'Resolving the exact item and collecting its product details.',
+    },
+    {
+      title: 'Querying the model',
+      detail: 'Encoding the product and scanning for sensible dupe candidates.',
+    },
+    {
+      title: 'Checking live listings',
+      detail: 'Keeping only products that still have active shopping pages.',
+    },
+    {
+      title: 'Ranking the matches',
+      detail: 'Scoring similarity, savings, and grounded explanation details.',
+    },
+  ]), []);
 
   const loadDupes = useCallback(async () => {
     setLoading(true);
@@ -51,6 +80,39 @@ export default function SearchResultsScreen() {
   useEffect(() => {
     loadDupes();
   }, [loadDupes]);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStep(loadingSteps.length - 1);
+      loadingProgress.value = 1;
+      return;
+    }
+
+    setLoadingStep(0);
+    loadingProgress.value = 0;
+    loadingProgress.value = withRepeat(
+      withTiming(1, {
+        duration: 1800,
+        easing: Easing.inOut(Easing.ease),
+      }),
+      -1,
+      false,
+    );
+    const interval = setInterval(() => {
+      setLoadingStep(current => (current + 1) % loadingSteps.length);
+    }, 900);
+
+    return () => clearInterval(interval);
+  }, [loading, loadingProgress, loadingSteps.length]);
+
+  const loadingRailStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: interpolate(loadingProgress.value, [0, 1], [-118, 118]),
+      },
+    ],
+    opacity: interpolate(loadingProgress.value, [0, 0.15, 0.85, 1], [0.45, 0.9, 0.9, 0.45]),
+  }));
 
   useEffect(() => {
     if (sourceProduct) {
@@ -130,7 +192,79 @@ export default function SearchResultsScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          {[1, 2, 3, 4].map(i => (
+          <View style={styles.modelLoaderCard}>
+            <View style={styles.modelLoaderHeader}>
+              <View style={styles.modelLoaderBadge}>
+                <Text style={styles.modelLoaderBadgeText}>Model Working</Text>
+              </View>
+              <Text style={styles.modelLoaderCounter}>
+                {loadingStep + 1}/{loadingSteps.length}
+              </Text>
+            </View>
+
+            <Text style={styles.modelLoaderTitle}>{loadingSteps[loadingStep].title}</Text>
+            <Text style={styles.modelLoaderSubtitle}>{loadingSteps[loadingStep].detail}</Text>
+
+            <View style={styles.loadingPipeline}>
+              <View style={styles.loadingPipelineTrack} />
+              <Animated.View style={[styles.loadingPipelineRail, loadingRailStyle]} />
+              {loadingSteps.map((step, index) => {
+                const isActive = index === loadingStep;
+                const isComplete = index < loadingStep;
+
+                return (
+                  <View key={step.title} style={styles.loadingPipelineNodeWrap}>
+                    <View
+                      style={[
+                        styles.loadingPipelineNode,
+                        isComplete && styles.loadingPipelineNodeComplete,
+                        isActive && styles.loadingPipelineNodeActive,
+                      ]}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={styles.loadingStepList}>
+              {loadingSteps.map((step, index) => {
+                const isActive = index === loadingStep;
+                const isComplete = index < loadingStep;
+
+                return (
+                  <View key={step.title} style={styles.loadingStepRow}>
+                    <View
+                      style={[
+                        styles.loadingStepDot,
+                        isComplete && styles.loadingStepDotComplete,
+                        isActive && styles.loadingStepDotActive,
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.loadingStepText,
+                        isActive && styles.loadingStepTextActive,
+                        isComplete && styles.loadingStepTextComplete,
+                      ]}
+                    >
+                      {step.title}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={styles.loadingPreviewCard}>
+              <Skeleton width={72} height={72} borderRadius={radius.md} />
+              <View style={styles.loadingPreviewInfo}>
+                <Skeleton width="42%" height={12} />
+                <Skeleton width="82%" height={16} style={{ marginTop: spacing.xs }} />
+                <Skeleton width="56%" height={12} style={{ marginTop: spacing.xs }} />
+              </View>
+            </View>
+          </View>
+
+          {[1, 2].map(i => (
             <ProductCardSkeleton key={i} />
           ))}
         </View>
@@ -194,6 +328,141 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     padding: spacing.lg,
+  },
+  modelLoaderCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+  },
+  modelLoaderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  modelLoaderBadge: {
+    backgroundColor: colors.accentLight,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  modelLoaderBadgeText: {
+    ...typography.smallBold,
+    color: colors.primary,
+    textTransform: 'uppercase',
+  },
+  modelLoaderCounter: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  modelLoaderTitle: {
+    ...typography.h3,
+    color: colors.primary,
+    marginTop: spacing.md,
+  },
+  modelLoaderSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 20,
+  },
+  loadingPipeline: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    position: 'relative',
+    height: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loadingPipelineTrack: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.border,
+  },
+  loadingPipelineRail: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -24,
+    width: 48,
+    height: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  loadingPipelineNodeWrap: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingPipelineNode: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  loadingPipelineNodeActive: {
+    backgroundColor: colors.accent,
+    transform: [{ scale: 1.08 }],
+  },
+  loadingPipelineNodeComplete: {
+    backgroundColor: colors.primary,
+  },
+  loadingStepList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  loadingStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  loadingStepDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.border,
+  },
+  loadingStepDotActive: {
+    backgroundColor: colors.accent,
+  },
+  loadingStepDotComplete: {
+    backgroundColor: colors.primary,
+  },
+  loadingStepText: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  loadingStepTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  loadingStepTextComplete: {
+    color: colors.text,
+  },
+  loadingPreviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    backgroundColor: colors.cream,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  loadingPreviewInfo: {
+    flex: 1,
   },
   centerMessage: {
     flex: 1,

@@ -309,7 +309,7 @@ export default function ProductDetailsScreen() {
             {priceOffersError ? <Text style={styles.priceMatchError}>{priceOffersError}</Text> : null}
 
             {!priceOffersLoading && !priceOffersError && priceOffers.length === 0 ? (
-              <Text style={styles.priceMatchEmpty}>No verified retailer offers found yet.</Text>
+              <Text style={styles.priceMatchEmpty}>No live shopping links found right now.</Text>
             ) : null}
 
             {priceOffers.slice(0, 3).map((offer, index) => (
@@ -452,7 +452,7 @@ export default function ProductDetailsScreen() {
           <Animated.View entering={FadeInUp.delay(400).duration(400)}>
             <Text style={styles.sectionTitle}>Why This Match?</Text>
             <View style={styles.reasonsBox}>
-              {(matchReasonParts.length > 0 ? matchReasonParts : ['Matched on closest overall product attributes']).map((reason, i) => (
+              {(matchReasonParts.length > 0 ? matchReasonParts : ['Matched using available product data']).map((reason, i) => (
                 <View key={i} style={styles.reasonRow}>
                   <View style={styles.checkCircle}>
                     <Feather name="check" size={14} color={colors.success} />
