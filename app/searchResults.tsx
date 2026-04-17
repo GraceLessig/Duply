@@ -49,10 +49,13 @@ export default function SearchResultsScreen() {
   const params = useLocalSearchParams<{ q?: string; productId?: string; productName?: string }>();
 
   const [dupes, setDupes] = useState<Dupe[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sourceProduct, setSourceProduct] = useState<Product | null>(null);
   const { showHigherPricedMatches } = usePreferences();
+  const isInitialLoading = loading && dupes.length === 0;
+  const isRefreshingResults = loading && dupes.length > 0;
 
   const loadDupes = useCallback(async () => {
     setLoading(true);
@@ -109,7 +112,7 @@ export default function SearchResultsScreen() {
   const renderItem = ({ item, index }: { item: Dupe; index: number }) => (
     <Animated.View entering={FadeInRight.delay(index * 80).duration(400)}>
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, viewMode === 'grid' ? styles.cardGrid : styles.cardList]}
         activeOpacity={0.7}
         onPress={() =>
           router.push({
@@ -125,13 +128,13 @@ export default function SearchResultsScreen() {
         }
       >
         {item.dupe.image ? (
-          <Image source={{ uri: item.dupe.image }} style={styles.imageBox} contentFit="cover" />
+          <Image source={{ uri: item.dupe.image }} style={[styles.imageBox, viewMode === 'grid' && styles.imageBoxGrid]} contentFit="cover" />
         ) : (
-          <View style={[styles.imageBox, styles.imagePlaceholder]}>
+          <View style={[styles.imageBox, viewMode === 'grid' && styles.imageBoxGrid, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>Image unavailable</Text>
           </View>
         )}
-        <View style={styles.info}>
+        <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
           <Text style={styles.brand}>{item.dupe.brand}</Text>
           <Text style={styles.name} numberOfLines={2}>{item.dupe.name}</Text>
           <View style={styles.matchRow}>
@@ -143,7 +146,7 @@ export default function SearchResultsScreen() {
             <Text style={styles.matchReason} numberOfLines={2}>{item.matchReason}</Text>
           ) : null}
         </View>
-        <View style={styles.priceCol}>
+        <View style={[styles.priceCol, viewMode === 'grid' && styles.priceColGrid]}>
           <Text style={styles.dupePrice}>${item.dupe.price.toFixed(2)}</Text>
           <Text style={styles.origPrice}>${item.original.price.toFixed(2)}</Text>
           {Math.max(item.original.price - item.dupe.price, 0) > 0 ? (
@@ -171,7 +174,25 @@ export default function SearchResultsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
+      <View style={styles.viewModeWrap}>
+        {(['list', 'grid'] as const).map(mode => {
+          const active = viewMode === mode;
+          return (
+            <TouchableOpacity
+              key={mode}
+              onPress={() => setViewMode(mode)}
+              style={[styles.viewModeChip, active && styles.viewModeChipActive]}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.viewModeChipText, active && styles.viewModeChipTextActive]}>
+                {mode === 'list' ? 'List View' : 'Grid View'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {isInitialLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingTitle}>Finding dupes</Text>
           <Text style={styles.loadingSubtitle}>Running the selected product through the model.</Text>
@@ -196,11 +217,21 @@ export default function SearchResultsScreen() {
         </View>
       ) : (
         <FlatList
+          key={`dupes-${viewMode}`}
           data={dupes}
+          numColumns={viewMode === 'grid' ? 2 : 1}
           keyExtractor={item => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, viewMode === 'grid' && styles.gridList]}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            isRefreshingResults ? (
+              <View style={styles.inlineLoadingPill}>
+                <Text style={styles.inlineLoadingText}>Refreshing dupes...</Text>
+              </View>
+            ) : null
+          }
         />
       )}
     </SafeAreaView>
@@ -268,6 +299,32 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.primary,
   },
+  viewModeWrap: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  viewModeChip: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  viewModeChipActive: {
+    backgroundColor: colors.primary,
+  },
+  viewModeChipText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  viewModeChipTextActive: {
+    color: colors.textOnPrimary,
+  },
   centerMessage: {
     flex: 1,
     alignItems: 'center',
@@ -303,8 +360,27 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
+  gridList: {
+    paddingBottom: spacing.xxxl,
+  },
+  gridRow: {
+    gap: spacing.md,
+  },
+  inlineLoadingPill: {
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.cream,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  inlineLoadingText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
   card: {
-    flexDirection: 'row',
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: radius.lg,
@@ -314,11 +390,23 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     ...shadows.sm,
   },
+  cardList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardGrid: {
+    flex: 1,
+  },
   imageBox: {
     width: 64,
     height: 64,
     borderRadius: radius.md,
     backgroundColor: colors.skeleton,
+  },
+  imageBoxGrid: {
+    width: '100%',
+    height: 144,
+    marginBottom: spacing.md,
   },
   imagePlaceholder: {
     alignItems: 'center',
@@ -334,6 +422,9 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     marginHorizontal: spacing.md,
+  },
+  infoGrid: {
+    marginHorizontal: 0,
   },
   brand: {
     ...typography.small,
@@ -369,6 +460,10 @@ const styles = StyleSheet.create({
   },
   priceCol: {
     alignItems: 'flex-end',
+  },
+  priceColGrid: {
+    alignItems: 'flex-start',
+    marginTop: spacing.sm,
   },
   dupePrice: {
     ...typography.bodyBold,

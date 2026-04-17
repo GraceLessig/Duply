@@ -8,11 +8,12 @@ import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductSearchResults } from '../hooks/useProducts';
 import type { Product } from '../services/api';
-import { prefetchProductsById } from '../services/api';
+import { dataService, prefetchProductsById } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
 
 type SortOption = 'az' | 'priceLow' | 'priceHigh' | 'popular';
+type ViewMode = 'list' | 'grid';
 
 const sortOptions: { id: SortOption; label: string }[] = [
   { id: 'popular', label: 'Popular' },
@@ -30,12 +31,15 @@ export default function SearchCatalogScreen() {
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [sortBy, setSortBy] = useState<SortOption>('popular');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
   const { data, loading, error } = useProductSearchResults(submittedQuery, { page, pageSize, sort: sortBy });
   const products = data?.items || EMPTY_PRODUCTS;
   const totalProducts = data?.total || 0;
   const totalPages = data?.totalPages || 1;
+  const isInitialLoading = loading && products.length === 0;
+  const isRefreshingResults = loading && products.length > 0;
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -55,6 +59,22 @@ export default function SearchCatalogScreen() {
   useEffect(() => {
     prefetchProductsById(products.slice(0, 8).map(product => product.id));
   }, [products]);
+
+  useEffect(() => {
+    if (!submittedQuery || !data || page >= totalPages) {
+      return;
+    }
+
+    void dataService.searchProductsPage(submittedQuery, {
+      page: page + 1,
+      pageSize,
+      sort: sortBy,
+    }).then(nextPage => {
+      prefetchProductsById(nextPage.items.slice(0, 8).map(product => product.id));
+    }).catch(() => {
+      // Best-effort next-page warmup only.
+    });
+  }, [data, page, pageSize, sortBy, submittedQuery, totalPages]);
 
   const runSearch = () => {
     const trimmed = query.trim();
@@ -154,7 +174,31 @@ export default function SearchCatalogScreen() {
         </View>
       </View>
 
-      {loading ? (
+      <View style={styles.viewModeBlock}>
+        <Text style={styles.pageSizeLabel}>View</Text>
+        <View style={styles.viewModeOptions}>
+          {(['list', 'grid'] as ViewMode[]).map(mode => {
+            const active = viewMode === mode;
+            return (
+              <Pressable
+                key={mode}
+                onPress={() => setViewMode(mode)}
+                style={({ pressed }) => [
+                  styles.viewModeChip,
+                  active && styles.viewModeChipActive,
+                  pressed && styles.sortChipPressed,
+                ]}
+              >
+                <Text style={[styles.viewModeChipText, active && styles.viewModeChipTextActive]}>
+                  {mode === 'list' ? 'List' : 'Grid'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {isInitialLoading ? (
         <View style={styles.loadingWrap}>
           {[1, 2, 3, 4].map(i => (
             <ProductCardSkeleton key={i} />
@@ -172,32 +216,46 @@ export default function SearchCatalogScreen() {
         </View>
       ) : (
         <FlatList
+          key={`search-catalog-${viewMode}`}
           data={products}
+          numColumns={viewMode === 'grid' ? 2 : 1}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, viewMode === 'grid' && styles.gridList]}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              style={({ pressed }) => [
+                styles.card,
+                viewMode === 'grid' ? styles.cardGrid : styles.cardList,
+                pressed && styles.cardPressed,
+              ]}
               onPress={() => openProductForDupes(item.id, item.name)}
             >
               {item.image ? (
-                <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
+                <Image source={{ uri: item.image }} style={[styles.image, viewMode === 'grid' && styles.imageGrid]} contentFit="cover" />
               ) : (
-                <View style={[styles.image, styles.imagePlaceholder]}>
+                <View style={[styles.image, viewMode === 'grid' && styles.imageGrid, styles.imagePlaceholder]}>
                   <Text style={styles.placeholderText}>Image unavailable</Text>
                 </View>
               )}
-              <View style={styles.info}>
+              <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
                 <Text style={styles.brand}>{item.brand}</Text>
                 <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-                <View style={styles.metaRow}>
+                <View style={[styles.metaRow, viewMode === 'grid' && styles.metaRowGrid]}>
                   <Text style={styles.type}>{item.productType}</Text>
                   <Text style={styles.price}>${item.price.toFixed(2)}</Text>
                 </View>
               </View>
             </Pressable>
           )}
+          ListHeaderComponent={
+            isRefreshingResults ? (
+              <View style={styles.inlineLoadingPill}>
+                <Text style={styles.inlineLoadingText}>Loading updated results...</Text>
+              </View>
+            ) : null
+          }
           ListFooterComponent={
             <View style={styles.pagination}>
               <Pressable
@@ -338,6 +396,34 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
+  viewModeBlock: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  viewModeOptions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  viewModeChip: {
+    minWidth: 76,
+    alignItems: 'center',
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  viewModeChipActive: {
+    backgroundColor: colors.primary,
+  },
+  viewModeChipText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  viewModeChipTextActive: {
+    color: colors.textOnPrimary,
+  },
   pageSizeChip: {
     minWidth: 52,
     alignItems: 'center',
@@ -361,6 +447,20 @@ const styles = StyleSheet.create({
   loadingWrap: {
     paddingHorizontal: spacing.lg,
   },
+  inlineLoadingPill: {
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.cream,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  inlineLoadingText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
   centerState: {
     flex: 1,
     alignItems: 'center',
@@ -381,6 +481,12 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  gridList: {
+    paddingBottom: spacing.xxxl,
+  },
+  gridRow: {
+    gap: spacing.md,
   },
   pagination: {
     flexDirection: 'row',
@@ -415,8 +521,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
@@ -424,6 +528,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
     ...shadows.sm,
+  },
+  cardList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardGrid: {
+    flex: 1,
   },
   cardPressed: {
     opacity: 0.9,
@@ -434,6 +545,11 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: radius.lg,
     backgroundColor: colors.skeleton,
+  },
+  imageGrid: {
+    width: '100%',
+    height: 148,
+    marginBottom: spacing.md,
   },
   imagePlaceholder: {
     alignItems: 'center',
@@ -449,6 +565,9 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     marginLeft: spacing.md,
+  },
+  infoGrid: {
+    marginLeft: 0,
   },
   brand: {
     ...typography.small,
@@ -466,6 +585,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.sm,
     gap: spacing.md,
+  },
+  metaRowGrid: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+    gap: spacing.xs,
   },
   type: {
     ...typography.small,

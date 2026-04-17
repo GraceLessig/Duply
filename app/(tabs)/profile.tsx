@@ -174,38 +174,41 @@ function ProfileContent() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable onPress={() => setShowPhotoPreview(true)} style={styles.avatarCircle}>
-            {profile.photoUri ? (
-              <Image source={{ uri: profile.photoUri }} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <DefaultAvatar />
-            )}
-          </Pressable>
-          <Pressable onPress={pickProfilePhoto} style={styles.photoButton} disabled={saving}>
-            <Camera width={16} height={16} stroke={colors.primary} />
-            <Text style={styles.photoButtonText}>
-              {saving ? 'Saving...' : profile.photoUri ? 'Change Photo' : 'Upload Photo'}
-            </Text>
-          </Pressable>
-          <Text style={styles.name}>{profile.displayName || user?.displayName || 'Display Name'}</Text>
-          <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
-          <Pressable onPress={signOut} style={styles.signOutButton} disabled={authLoading}>
-            <LogOut width={16} height={16} stroke={colors.primary} />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </Pressable>
-        </View>
+          <View style={styles.heroGlow} />
+          <View style={styles.heroPanel}>
+            <Pressable onPress={() => setShowPhotoPreview(true)} style={styles.avatarCircle}>
+              {profile.photoUri ? (
+                <Image source={{ uri: profile.photoUri }} style={styles.avatarImage} contentFit="cover" />
+              ) : (
+                <DefaultAvatar />
+              )}
+            </Pressable>
+            <Text style={styles.profileEyebrow}>Your Profile</Text>
+            <Text style={styles.name}>{profile.displayName || user?.displayName || 'Display Name'}</Text>
+            <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
 
-        <View style={styles.statsWrapper}>
-          <View style={styles.statsCard}>
-            <View style={styles.statsRow}>
-              <StatItem
-                icon={Heart}
-                value={savedProducts}
-                label="Favorites"
-                bg={colors.accentLight}
-                color={colors.primary}
-                onPress={() => router.push('/favorites' as Href)}
-              />
+            <View style={styles.heroBadgeRow}>
+              <Pressable onPress={() => router.push('/favorites' as Href)} style={({ pressed }) => [styles.heroBadge, pressed && styles.statItemPressed]}>
+                <Heart width={14} height={14} stroke={colors.primary} />
+                <Text style={styles.heroBadgeText}>{savedProducts} favorites</Text>
+              </Pressable>
+              <View style={styles.heroBadge}>
+                <View style={[styles.syncDot, saving ? styles.syncDotActive : loaded ? styles.syncDotReady : styles.syncDotIdle]} />
+                <Text style={styles.heroBadgeText}>{saving ? 'Syncing' : loaded ? 'Synced' : 'Loading'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.heroActionRow}>
+              <Pressable onPress={pickProfilePhoto} style={styles.photoButton} disabled={saving}>
+                <Camera width={16} height={16} stroke={colors.primary} />
+                <Text style={styles.photoButtonText}>
+                  {saving ? 'Saving...' : profile.photoUri ? 'Change Photo' : 'Upload Photo'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={signOut} style={styles.signOutButton} disabled={authLoading}>
+                <LogOut width={16} height={16} stroke={colors.primary} />
+                <Text style={styles.signOutText}>Sign Out</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -271,18 +274,6 @@ function ProfileContent() {
   );
 }
 
-function StatItem({ icon: Icon, value, label, bg, color, onPress }: any) {
-  return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.statItem, pressed && onPress && styles.statItemPressed]}>
-      <View style={[styles.statIcon, { backgroundColor: bg }]}>
-        <Icon width={20} height={20} stroke={color} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function SettingsRow({ icon: Icon, label, onPress, danger }: any) {
   return (
     <Pressable style={({ pressed }) => [styles.settingsItem, pressed && { opacity: 0.75 }]} onPress={onPress}>
@@ -309,9 +300,30 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.accentLight,
-    paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxl + 12,
+    paddingTop: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    position: 'relative',
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: 18,
+    right: spacing.xl,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: colors.surface,
+    opacity: 0.38,
+  },
+  heroPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
+    ...shadows.md,
   },
   lockedHeader: {
     backgroundColor: colors.accentLight,
@@ -321,9 +333,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarCircle: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 92,
+    height: 92,
+    borderRadius: 46,
     backgroundColor: colors.softGold,
     alignItems: 'center',
     justifyContent: 'center',
@@ -373,14 +385,15 @@ const styles = StyleSheet.create({
   photoButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.md,
     borderWidth: 2,
     borderColor: colors.primary,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    flex: 1,
   },
   photoButtonText: {
     ...typography.smallBold,
@@ -399,11 +412,19 @@ const styles = StyleSheet.create({
   name: {
     ...typography.h2,
     color: colors.primary,
+    textAlign: 'center',
   },
   email: {
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  profileEyebrow: {
+    ...typography.smallBold,
+    color: colors.accent,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
   },
   lockedTitle: {
     ...typography.h2,
@@ -531,62 +552,68 @@ const styles = StyleSheet.create({
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.md,
     borderWidth: 2,
     borderColor: colors.primary,
     borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
+    flex: 1,
   },
   signOutText: {
     ...typography.smallBold,
     color: colors.primary,
   },
-  statsWrapper: {
-    marginTop: -24,
-    paddingHorizontal: spacing.lg,
-  },
-  statsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    ...shadows.md,
-  },
-  statsRow: {
+  heroBadgeRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
   },
-  statItem: {
-    width: 120,
+  heroBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.cream,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   statItemPressed: {
     opacity: 0.8,
   },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  statValue: {
-    ...typography.h3,
+  heroBadgeText: {
+    ...typography.smallBold,
     color: colors.primary,
   },
-  statLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: 2,
+  syncDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  syncDotIdle: {
+    backgroundColor: colors.textMuted,
+  },
+  syncDotReady: {
+    backgroundColor: colors.primary,
+  },
+  syncDotActive: {
+    backgroundColor: colors.accent,
+  },
+  heroActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    width: '100%',
   },
   section: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
   },
   sectionTitle: {
     ...typography.bodyBold,

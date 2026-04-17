@@ -8,7 +8,7 @@ import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductsByCategory } from '../hooks/useProducts';
 import type { Product } from '../services/api';
-import { prefetchProductsById, seedProductCache } from '../services/api';
+import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
 
@@ -36,6 +36,8 @@ export default function CategoryProductsScreen() {
   const products = data?.items || EMPTY_PRODUCTS;
   const totalProducts = data?.total || 0;
   const totalPages = data?.totalPages || 1;
+  const isInitialLoading = loading && products.length === 0;
+  const isRefreshingResults = loading && products.length > 0;
 
   useEffect(() => {
     setPage(1);
@@ -51,6 +53,23 @@ export default function CategoryProductsScreen() {
     products.slice(0, 8).forEach(seedProductCache);
     prefetchProductsById(products.slice(0, 8).map(product => product.id));
   }, [products]);
+
+  useEffect(() => {
+    if (!category || !data || page >= totalPages) {
+      return;
+    }
+
+    void dataService.getProductsByCategory(category, {
+      page: page + 1,
+      pageSize,
+      query,
+      sort: sortBy,
+    }).then(nextPage => {
+      prefetchProductsById(nextPage.items.slice(0, 8).map(product => product.id));
+    }).catch(() => {
+      // Best-effort next-page warmup only.
+    });
+  }, [category, data, page, pageSize, query, sortBy, totalPages]);
 
   const openProduct = (id: string, name: string) => {
     const selected = products.find(item => item.id === id);
@@ -150,7 +169,7 @@ export default function CategoryProductsScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {isInitialLoading ? (
         <View style={styles.loadingWrap}>
           {[1, 2, 3, 4].map(i => (
             <ProductCardSkeleton key={i} />
@@ -173,6 +192,13 @@ export default function CategoryProductsScreen() {
             keyExtractor={item => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              isRefreshingResults ? (
+                <View style={styles.inlineLoadingPill}>
+                  <Text style={styles.inlineLoadingText}>Loading updated products...</Text>
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => (
               <Pressable
                 style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -359,6 +385,20 @@ const styles = StyleSheet.create({
   },
   loadingWrap: {
     paddingHorizontal: spacing.lg,
+  },
+  inlineLoadingPill: {
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.cream,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  inlineLoadingText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   list: {
     paddingHorizontal: spacing.lg,
