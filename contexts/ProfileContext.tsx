@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { firebaseDb, firebaseStorage } from '../services/firebaseClient';
@@ -127,9 +127,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const saving = isSavingProfile || isUploadingPhoto;
 
   const fallbackProfile = useMemo<ProfilePreferences>(() => ({
-    displayName: user?.displayName || DEFAULT_PROFILE.displayName,
+    displayName: user?.email || user?.displayName || DEFAULT_PROFILE.displayName,
     photoUri: DEFAULT_PROFILE.photoUri,
-  }), [user?.displayName]);
+  }), [user?.displayName, user?.email]);
 
   const persist = useCallback(async (value: ProfilePreferences, uid?: string) => {
     try {
@@ -258,18 +258,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   }, [fallbackProfile, persist, profile, saveRemoteProfile, user?.uid]);
 
   const resetProfile = useCallback(() => {
-    const next = fallbackProfile;
+    const next = normalizeProfile({
+      displayName: user?.email || DEFAULT_PROFILE.displayName,
+      photoUri: '',
+    }, fallbackProfile);
     setProfile(next);
+    setError(null);
     void persist(next, user?.uid);
-
-    const uid = user?.uid;
-    const remoteDoc = uid ? profileDoc(uid) : null;
-    if (remoteDoc) {
-      deleteDoc(remoteDoc).catch(err => {
-        setError(profileErrorMessage(err, 'Could not reset your synced profile right now.'));
-      });
-    }
-  }, [fallbackProfile, persist, user?.uid]);
+    void saveRemoteProfile(next);
+  }, [fallbackProfile, persist, saveRemoteProfile, user?.email, user?.uid]);
 
   return (
     <ProfileContext.Provider value={{ profile, loaded, saving, error, updateProfile, uploadProfilePhoto, resetProfile }}>

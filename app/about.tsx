@@ -34,17 +34,22 @@ export default function AboutScreen() {
         <View style={styles.card}>
           <InfoRow
             title="Search"
-            body="Suggestions come from your database as the user types, then Enter picks the top result."
+            body="As you type, Duply searches the live catalog and shows quick suggestions so you can jump straight into a specific product."
           />
           <View style={styles.divider} />
           <InfoRow
-            title="Product Details"
-            body="Each product page can show ingredient, packaging, skin type, size, country, review count, and live price-match offers."
+            title="Pick a Product"
+            body="Choose a suggested result to run that exact product through the dupe engine, or press Enter to browse matching catalog results with images and sorting."
           />
           <View style={styles.divider} />
           <InfoRow
             title="Dupe Matching"
-            body="The backend model ranks likely dupes, and the UI explains each match using overlapping product fields."
+            body="The backend ranks likely dupes, filters out same-product shade variants, and explains each match using real overlapping product data."
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            title="Product Pages"
+            body="Open any product page to view richer details, save favorites, and check live retailer offers for price matching."
           />
         </View>
 
