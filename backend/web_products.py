@@ -94,45 +94,6 @@ TOP_BRAND_ALIASES = {
     "nyx": "nyx professional makeup",
 }
 
-APPROVED_RETAILER_DOMAINS = {
-    "ulta.com",
-    "sephora.com",
-    "target.com",
-    "walmart.com",
-    "cvs.com",
-    "walgreens.com",
-    "kohls.com",
-    "macys.com",
-    "nordstrom.com",
-    "beautylish.com",
-    "rarebeauty.com",
-    "fentybeauty.com",
-    "charlottetilbury.com",
-    "glossier.com",
-    "rhodeskin.com",
-    "soldejaneiro.com",
-    "milkmakeup.com",
-    "elfcosmetics.com",
-    "nyxcosmetics.com",
-    "revlon.com",
-    "covergirl.com",
-    "maybelline.com",
-    "lorealparisusa.com",
-    "esteelauder.com",
-    "maccosmetics.com",
-    "tartecosmetics.com",
-    "narscosmetics.com",
-    "dior.com",
-    "chanel.com",
-}
-
-BLOCKED_MARKETPLACE_DOMAINS = {
-    "ebay.com",
-    "mercari.com",
-    "poshmark.com",
-    "depop.com",
-}
-
 LIVE_AUGMENTATION_LIMIT_PER_BRAND = int(os.getenv("DUPLY_LIVE_LIMIT_PER_BRAND", "6"))
 LIVE_CATEGORY_MAX_BRANDS = int(os.getenv("DUPLY_LIVE_CATEGORY_MAX_BRANDS", "19"))
 
@@ -467,24 +428,13 @@ def _source_domain(url):
     return match.group(1).lower() if match else ""
 
 
-def _is_blocked_marketplace_domain(domain):
-    domain = str(domain or "").lower()
-    return any(domain == blocked or domain.endswith(f".{blocked}") for blocked in BLOCKED_MARKETPLACE_DOMAINS)
-
-
 def _is_approved_retailer_domain(domain):
     domain = str(domain or "").lower()
-    if not domain:
-        return False
-    if _is_blocked_marketplace_domain(domain):
-        return False
-    if any(domain == approved or domain.endswith(f".{approved}") for approved in APPROVED_RETAILER_DOMAINS):
-        return True
-    return "." in domain
+    return bool(domain and "." in domain)
 
 
 def _is_approved_retailer_url(url):
-    return _is_approved_retailer_domain(_source_domain(url))
+    return str(url or "").strip().startswith(("http://", "https://")) and _is_approved_retailer_domain(_source_domain(url))
 
 
 def is_approved_retailer_url(url):
