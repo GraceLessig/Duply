@@ -31,18 +31,6 @@ export default function FavoritesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
-            <Heart width={20} height={20} stroke={colors.primary} />
-          </View>
-          <View style={styles.summaryText}>
-            <Text style={styles.summaryTitle}>Favorites only</Text>
-            <Text style={styles.summarySubtitle}>
-              Save products from their product pages. Dupe comparisons stay browsable, but they are no longer saved as separate items.
-            </Text>
-          </View>
-        </View>
-
         {!loaded ? null : favorites.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyState}>
@@ -50,12 +38,9 @@ export default function FavoritesScreen() {
                 <Heart width={36} height={36} stroke={colors.accent} />
               </View>
               <Text style={styles.emptyTitle}>No favorites saved yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Tap the heart on any product page to keep it here.
-              </Text>
               <Link href="/search" asChild>
                 <Pressable style={styles.button}>
-                  <Text style={styles.buttonText}>Start Exploring</Text>
+                  <Text style={styles.buttonText}>Explore</Text>
                 </Pressable>
               </Link>
             </View>
@@ -181,39 +166,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     flexGrow: 1,
   },
-  summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-  },
-  summaryIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.accentLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryText: {
-    flex: 1,
-  },
-  summaryTitle: {
-    ...typography.bodyBold,
-    color: colors.primary,
-  },
-  summarySubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -240,15 +192,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...typography.h3,
     color: colors.primary,
-    marginBottom: spacing.sm,
     textAlign: 'center',
-  },
-  emptySubtitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: 20,
   },
   button: {
     marginTop: spacing.xl,

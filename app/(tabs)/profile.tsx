@@ -206,9 +206,6 @@ function ProfileContent() {
                 onPress={() => router.push('/favorites' as Href)}
               />
             </View>
-            <Text style={styles.statsCaption}>
-              {savedProducts} saved favorite{savedProducts === 1 ? '' : 's'} synced to your account.
-            </Text>
           </View>
         </View>
 
@@ -573,12 +570,6 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  statsCaption: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-    textAlign: 'center',
   },
   section: {
     paddingHorizontal: spacing.lg,
