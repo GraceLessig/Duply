@@ -131,10 +131,6 @@ BLOCKED_MARKETPLACE_DOMAINS = {
     "mercari.com",
     "poshmark.com",
     "depop.com",
-    "amazon.com",
-    "amazon.co.uk",
-    "amazon.ca",
-    "amazon.in",
 }
 
 LIVE_AUGMENTATION_LIMIT_PER_BRAND = int(os.getenv("DUPLY_LIVE_LIMIT_PER_BRAND", "6"))
