@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeft, ChevronRight, FileText, Mail, Shield } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '../constants/theme';
@@ -50,11 +50,11 @@ export default function AboutScreen() {
 
         <Text style={styles.sectionLabel}>Legal</Text>
         <View style={styles.card}>
-          <LinkRow icon={FileText} label="Terms of Service" />
+          <LinkRow icon={FileText} label="Terms of Service" onPress={() => router.push('/terms')} />
           <View style={styles.divider} />
-          <LinkRow icon={Shield} label="Privacy Policy" />
+          <LinkRow icon={Shield} label="Privacy Policy" onPress={() => router.push('/privacy')} />
           <View style={styles.divider} />
-          <LinkRow icon={Mail} label="Contact Us" />
+          <LinkRow icon={Mail} label="Contact Us" onPress={() => Linking.openURL('mailto:support@duply.app')} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -70,9 +70,9 @@ function InfoRow({ title, body }: { title: string; body: string }) {
   );
 }
 
-function LinkRow({ icon: Icon, label }: { icon: React.FC<any>; label: string }) {
+function LinkRow({ icon: Icon, label, onPress }: { icon: React.FC<any>; label: string; onPress: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}>
       <View style={styles.linkLeft}>
         <Icon width={20} height={20} stroke={colors.textMuted} />
         <Text style={styles.linkLabel}>{label}</Text>
