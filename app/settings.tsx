@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { ArrowLeft, Database, Search, Trash2 } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '../constants/theme';
@@ -8,12 +8,20 @@ import { useActivity } from '../hooks/useActivity';
 import { useFavorites } from '../hooks/useFavorites';
 import { usePreferences } from '../hooks/usePreferences';
 
+type PendingAction = {
+  title: string;
+  message: string;
+  successLabel: string;
+  onConfirm: () => void;
+} | null;
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { recentSearches, recentViews, clearRecentSearches, clearRecentViews } = useActivity();
   const { favorites, clearFavorites } = useFavorites();
   const { showHigherPricedMatches, setShowHigherPricedMatches } = usePreferences();
   const [successMessage, setSuccessMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   useEffect(() => {
     if (!successMessage) {
@@ -28,17 +36,22 @@ export default function SettingsScreen() {
   }, [successMessage]);
 
   const confirmAction = (title: string, message: string, successLabel: string, onConfirm: () => void) => {
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          onConfirm();
-          setSuccessMessage(successLabel);
-        },
-      },
-    ]);
+    setPendingAction({
+      title,
+      message,
+      successLabel,
+      onConfirm,
+    });
+  };
+
+  const handleConfirmedAction = () => {
+    if (!pendingAction) {
+      return;
+    }
+
+    pendingAction.onConfirm();
+    setSuccessMessage(pendingAction.successLabel);
+    setPendingAction(null);
   };
 
   const clearAllDupeData = () => {
@@ -135,6 +148,29 @@ export default function SettingsScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal
+        visible={Boolean(pendingAction)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingAction(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalCloseLayer} onPress={() => setPendingAction(null)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{pendingAction?.title}</Text>
+            <Text style={styles.modalMessage}>{pendingAction?.message}</Text>
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setPendingAction(null)} style={({ pressed }) => [styles.modalButton, styles.modalButtonSecondary, pressed && styles.actionRowPressed]}>
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleConfirmedAction} style={({ pressed }) => [styles.modalButton, styles.modalButtonDanger, pressed && styles.actionRowPressed]}>
+                <Text style={styles.modalButtonDangerText}>Clear</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -209,6 +245,66 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     color: colors.primary,
     textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: 'rgba(42, 11, 38, 0.28)',
+  },
+  modalCloseLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    ...typography.caption,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  modalButtonSecondary: {
+    backgroundColor: colors.cream,
+    borderColor: colors.primary,
+  },
+  modalButtonDanger: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  modalButtonSecondaryText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  modalButtonDangerText: {
+    ...typography.captionBold,
+    color: colors.textOnPrimary,
   },
   sectionLabel: {
     ...typography.captionBold,
