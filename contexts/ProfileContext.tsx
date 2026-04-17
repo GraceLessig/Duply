@@ -25,7 +25,7 @@ export interface ProfileContextValue {
 }
 
 const DEFAULT_PROFILE: ProfilePreferences = {
-  displayName: 'Beauty Lover',
+  displayName: 'Display Name',
   photoUri: '',
 };
 
@@ -202,7 +202,6 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     const uid = user?.uid;
     if (!uid || !firebaseStorage) {
       setError(!uid ? 'Sign in before uploading a profile photo.' : 'Firebase Storage is not configured for uploads.');
-      updateProfile({ photoUri: uri });
       return;
     }
 

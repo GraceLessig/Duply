@@ -18,7 +18,6 @@ export default function ProductDetailsScreen() {
   const { isFavorite: checkFavorite, toggleFavorite } = useFavorites();
   const params = useLocalSearchParams<{
     id?: string;
-    dupeId?: string;
     originalId?: string;
     dupeProductId?: string;
     similarity?: string;
@@ -167,27 +166,19 @@ export default function ProductDetailsScreen() {
     );
   }
 
-  const favoriteId = params.dupeId || id || '';
+  const favoriteId = original?.id || id || '';
   const isFav = checkFavorite(favoriteId);
 
   const handleToggleFavorite = () => {
-    if (!original) return;
+    if (!original || isComparisonView) return;
     toggleFavorite({
-      id: favoriteId,
-      kind: isComparisonView ? 'comparison' : 'product',
+      id: original.id,
       originalId: original.id,
-      dupeProductId: dupeProduct?.id,
       originalName: original.name,
       originalBrand: original.brand,
       originalPrice: original.price,
       originalImage: original.image,
-      dupeName: dupeProduct?.name || original.name,
-      dupeBrand: dupeProduct?.brand || original.brand,
-      dupePrice: dupeProduct?.price || original.price,
-      dupeImage: dupeProduct?.image || original.image,
-      similarity,
-      matchReason,
-      savings: savingsAmount,
+      savings: 0,
     });
   };
 
@@ -243,13 +234,17 @@ export default function ProductDetailsScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{original.name}</Text>
-        <TouchableOpacity onPress={handleToggleFavorite} style={styles.headerBtn}>
-          <Ionicons
-            name={isComparisonView ? (isFav ? 'star' : 'star-outline') : (isFav ? 'heart' : 'heart-outline')}
-            size={24}
-            color={isFav ? colors.accent : colors.textMuted}
-          />
-        </TouchableOpacity>
+        {isComparisonView ? (
+          <View style={styles.headerBtnSpacer} />
+        ) : (
+          <TouchableOpacity onPress={handleToggleFavorite} style={styles.headerBtn}>
+            <Ionicons
+              name={isFav ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isFav ? colors.accent : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -541,6 +536,9 @@ const styles = StyleSheet.create({
   headerBtn: {
     padding: spacing.sm,
     borderRadius: radius.md,
+  },
+  headerBtnSpacer: {
+    width: 40,
   },
   headerTitle: {
     ...typography.bodyBold,

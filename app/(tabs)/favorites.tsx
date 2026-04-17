@@ -1,30 +1,16 @@
 import { Image } from 'expo-image';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Heart, Star, Trash2 } from 'react-native-feather';
+import { Heart, Trash2 } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useFavorites } from '../../hooks/useFavorites';
 
-type SavedView = 'favorites' | 'comparisons';
-
 export default function FavoritesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ view?: string }>();
   const { favorites, loaded, removeFavorite, clearFavorites } = useFavorites();
-  const productFavorites = favorites.filter(item => (item.kind || 'comparison') === 'product');
-  const comparisonFavorites = favorites.filter(item => (item.kind || 'comparison') === 'comparison');
-  const [activeView, setActiveView] = useState<SavedView>(
-    params.view === 'comparisons' ? 'comparisons' : 'favorites'
-  );
-
-  useEffect(() => {
-    setActiveView(params.view === 'comparisons' ? 'comparisons' : 'favorites');
-  }, [params.view]);
-
-  const activeItems = activeView === 'favorites' ? productFavorites : comparisonFavorites;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -32,8 +18,7 @@ export default function FavoritesScreen() {
         <View>
           <Text style={styles.title}>Saved</Text>
           <Text style={styles.subtitle}>
-            {activeItems.length} {activeView === 'favorites' ? 'favorite' : 'dupe'}
-            {activeItems.length === 1 ? '' : 's'} saved
+            {favorites.length} favorite{favorites.length === 1 ? '' : 's'} saved
           </Text>
         </View>
         {favorites.length > 0 ? (
@@ -46,55 +31,27 @@ export default function FavoritesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        <View style={styles.chooserCard}>
-          <Text style={styles.chooserTitle}>Choose a saved view</Text>
-          <Text style={styles.chooserSubtitle}>Open your saved favorites or your saved dupes.</Text>
-
-          <View style={styles.viewToggle}>
-            <Pressable
-              onPress={() => setActiveView('favorites')}
-              style={[styles.viewToggleButton, activeView === 'favorites' && styles.viewToggleButtonActive]}
-            >
-              <Heart width={16} height={16} stroke={activeView === 'favorites' ? colors.textOnPrimary : colors.primary} />
-              <View>
-                <Text style={[styles.viewToggleText, activeView === 'favorites' && styles.viewToggleTextActive]}>Favorites</Text>
-                <Text style={[styles.viewToggleMeta, activeView === 'favorites' && styles.viewToggleMetaActive]}>
-                  {productFavorites.length} saved
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => setActiveView('comparisons')}
-              style={[styles.viewToggleButton, activeView === 'comparisons' && styles.viewToggleButtonActive]}
-            >
-              <Star width={16} height={16} stroke={activeView === 'comparisons' ? colors.textOnPrimary : colors.primary} />
-              <View>
-                <Text style={[styles.viewToggleText, activeView === 'comparisons' && styles.viewToggleTextActive]}>Dupes</Text>
-                <Text style={[styles.viewToggleMeta, activeView === 'comparisons' && styles.viewToggleMetaActive]}>
-                  {comparisonFavorites.length} saved
-                </Text>
-              </View>
-            </Pressable>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIcon}>
+            <Heart width={20} height={20} stroke={colors.primary} />
+          </View>
+          <View style={styles.summaryText}>
+            <Text style={styles.summaryTitle}>Favorites only</Text>
+            <Text style={styles.summarySubtitle}>
+              Save products from their product pages. Dupe comparisons stay browsable, but they are no longer saved as separate items.
+            </Text>
           </View>
         </View>
 
-        {!loaded ? null : activeItems.length === 0 ? (
+        {!loaded ? null : favorites.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyState}>
               <View style={styles.iconCircle}>
-                {activeView === 'favorites' ? (
-                  <Heart width={36} height={36} stroke={colors.accent} />
-                ) : (
-                  <Star width={36} height={36} stroke={colors.accent} />
-                )}
+                <Heart width={36} height={36} stroke={colors.accent} />
               </View>
-              <Text style={styles.emptyTitle}>
-                {activeView === 'favorites' ? 'No favorites saved yet' : 'No dupes saved yet'}
-              </Text>
+              <Text style={styles.emptyTitle}>No favorites saved yet</Text>
               <Text style={styles.emptySubtitle}>
-                {activeView === 'favorites'
-                  ? 'Tap the heart on a product page to save it here.'
-                  : 'Tap the star on a dupe comparison page to save the full dupe here.'}
+                Tap the heart on any product page to keep it here.
               </Text>
               <Link href="/search" asChild>
                 <Pressable style={styles.button}>
@@ -104,69 +61,33 @@ export default function FavoritesScreen() {
             </View>
           </View>
         ) : (
-          <SavedSection
-            title={activeView === 'favorites' ? 'Favorites' : 'Saved Dupes'}
-            subtitle={`${activeItems.length} saved`}
-            items={activeItems}
-            removeFavorite={removeFavorite}
-            onOpen={(item) =>
-              activeView === 'favorites'
-                ? router.push({
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Favorites</Text>
+              <Text style={styles.sectionSubtitle}>{favorites.length} saved</Text>
+            </View>
+
+            {favorites.map((item, index) => (
+              <FavoriteCard
+                key={item.id}
+                item={item}
+                index={index}
+                onOpen={() =>
+                  router.push({
                     pathname: '/productDetails',
                     params: {
                       id: item.originalId || item.id,
                       productName: item.originalName,
                     },
                   })
-                : router.push({
-                    pathname: '/productDetails',
-                    params: {
-                      dupeId: item.id,
-                      originalId: item.originalId,
-                      dupeProductId: item.dupeProductId,
-                      similarity: String(item.similarity),
-                      matchReason: item.matchReason || '',
-                      savings: String(item.savings),
-                    },
-                  })
-            }
-          />
+                }
+                onRemove={() => removeFavorite(item.id)}
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function SavedSection({
-  title,
-  subtitle,
-  items,
-  removeFavorite,
-  onOpen,
-}: {
-  title: string;
-  subtitle: string;
-  items: ReturnType<typeof useFavorites>['favorites'];
-  removeFavorite: (id: string) => void;
-  onOpen: (item: ReturnType<typeof useFavorites>['favorites'][number]) => void;
-}) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-      </View>
-
-      {items.map((item, index) => (
-        <FavoriteCard
-          key={item.id}
-          item={item}
-          index={index}
-          onOpen={() => onOpen(item)}
-          onRemove={() => removeFavorite(item.id)}
-        />
-      ))}
-    </View>
   );
 }
 
@@ -181,38 +102,32 @@ function FavoriteCard({
   onOpen: () => void;
   onRemove: () => void;
 }) {
-  const isComparison = (item.kind || 'comparison') === 'comparison';
-
   return (
     <Animated.View entering={FadeInDown.delay(index * 70).duration(280)}>
       <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.88 }]} onPress={onOpen}>
         <Image
-          source={{ uri: isComparison ? item.dupeImage : item.originalImage }}
+          source={{ uri: item.originalImage }}
           style={styles.cardImage}
           contentFit="cover"
         />
 
         <View style={styles.cardInfo}>
           <View style={styles.badgeRow}>
-            <View style={[styles.kindBadge, isComparison ? styles.comparisonBadge : styles.productBadge]}>
-              <Text style={styles.kindBadgeText}>{isComparison ? 'Comparison' : 'Product'}</Text>
+            <View style={styles.kindBadge}>
+              <Text style={styles.kindBadgeText}>Product</Text>
             </View>
           </View>
 
-          <Text style={styles.cardBrand}>{isComparison ? item.dupeBrand : item.originalBrand}</Text>
+          <Text style={styles.cardBrand}>{item.originalBrand}</Text>
           <Text style={styles.cardName} numberOfLines={2}>
-            {isComparison ? item.dupeName : item.originalName}
+            {item.originalName}
           </Text>
 
           <View style={styles.cardRow}>
             <Text style={styles.cardPrice}>
-              ${(isComparison ? item.dupePrice : item.originalPrice).toFixed(2)}
+              ${item.originalPrice.toFixed(2)}
             </Text>
-            {isComparison ? (
-              <Text style={styles.secondaryMeta}>Saved comparison and price-match view</Text>
-            ) : (
-              <Text style={styles.secondaryMeta}>Saved product page</Text>
-            )}
+            <Text style={styles.secondaryMeta}>Saved product page</Text>
           </View>
         </View>
 
@@ -266,7 +181,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     flexGrow: 1,
   },
-  chooserCard: {
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
@@ -275,48 +193,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     ...shadows.sm,
   },
-  chooserTitle: {
+  summaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryText: {
+    flex: 1,
+  },
+  summaryTitle: {
     ...typography.bodyBold,
     color: colors.primary,
   },
-  chooserSubtitle: {
+  summarySubtitle: {
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20,
-  },
-  viewToggle: {
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  viewToggleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.accentLight,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  viewToggleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  viewToggleText: {
-    ...typography.captionBold,
-    color: colors.primary,
-  },
-  viewToggleTextActive: {
-    color: colors.textOnPrimary,
-  },
-  viewToggleMeta: {
-    ...typography.small,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  viewToggleMetaActive: {
-    color: colors.textOnPrimary,
   },
   emptyContainer: {
     flex: 1,
@@ -412,11 +308,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
-  },
-  comparisonBadge: {
-    backgroundColor: colors.cream,
-  },
-  productBadge: {
     backgroundColor: colors.accentLight,
   },
   kindBadgeText: {
@@ -435,9 +326,9 @@ const styles = StyleSheet.create({
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
     marginTop: spacing.sm,
-    flexWrap: 'wrap',
   },
   cardPrice: {
     ...typography.bodyBold,
@@ -445,10 +336,11 @@ const styles = StyleSheet.create({
   },
   secondaryMeta: {
     ...typography.small,
-    color: colors.textSecondary,
+    color: colors.textMuted,
+    flex: 1,
+    textAlign: 'right',
   },
   removeBtn: {
-    padding: spacing.sm,
-    borderRadius: radius.md,
+    padding: spacing.xs,
   },
 });

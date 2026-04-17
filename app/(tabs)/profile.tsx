@@ -2,8 +2,8 @@ import { Href, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Camera, DollarSign, Heart, Info, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Camera, Heart, Info, LogOut, RefreshCw, Settings, User, X } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
@@ -97,7 +97,7 @@ export default function ProfileScreen() {
                   <TextInput
                     value={displayName}
                     onChangeText={setDisplayName}
-                    placeholder="Beauty Lover"
+                    placeholder="Display Name"
                     placeholderTextColor={colors.textMuted}
                     style={styles.input}
                   />
@@ -148,10 +148,9 @@ function ProfileContent() {
   const { user, signOut, loading: authLoading } = useAuth();
   const { favorites } = useFavorites();
   const { profile, loaded, saving, error, updateProfile, uploadProfilePhoto, resetProfile } = useProfile();
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
 
-  const totalSavings = favorites.reduce((sum, item) => sum + item.savings, 0);
-  const savedProducts = favorites.filter(item => (item.kind || 'comparison') === 'product').length;
-  const savedComparisons = favorites.filter(item => (item.kind || 'comparison') === 'comparison').length;
+  const savedProducts = favorites.length;
 
   const pickProfilePhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -174,7 +173,7 @@ function ProfileContent() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable onPress={pickProfilePhoto} style={styles.avatarCircle} disabled={saving}>
+          <Pressable onPress={() => setShowPhotoPreview(true)} style={styles.avatarCircle}>
             {profile.photoUri ? (
               <Image source={{ uri: profile.photoUri }} style={styles.avatarImage} contentFit="cover" />
             ) : (
@@ -187,7 +186,7 @@ function ProfileContent() {
               {saving ? 'Saving...' : profile.photoUri ? 'Change Photo' : 'Upload Photo'}
             </Text>
           </Pressable>
-          <Text style={styles.name}>{profile.displayName || user?.displayName || 'Beauty Lover'}</Text>
+          <Text style={styles.name}>{profile.displayName || user?.displayName || 'Display Name'}</Text>
           <Text style={styles.email}>{user?.email || 'Your beauty dupe dashboard'}</Text>
           <Pressable onPress={signOut} style={styles.signOutButton} disabled={authLoading}>
             <LogOut width={16} height={16} stroke={colors.primary} />
@@ -204,20 +203,11 @@ function ProfileContent() {
                 label="Favorites"
                 bg={colors.accentLight}
                 color={colors.primary}
-                onPress={() => router.push({ pathname: '/favorites', params: { view: 'favorites' } } as Href)}
-              />
-              <StatItem icon={DollarSign} value={`$${totalSavings.toFixed(0)}`} label="Savings" bg={colors.successLight} color={colors.success} />
-              <StatItem
-                icon={Star}
-                value={savedComparisons}
-                label="Dupes"
-                bg={colors.cream}
-                color={colors.primary}
-                onPress={() => router.push({ pathname: '/favorites', params: { view: 'comparisons' } } as Href)}
+                onPress={() => router.push('/favorites' as Href)}
               />
             </View>
             <Text style={styles.statsCaption}>
-              {savedProducts} saved favorite{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe{savedComparisons === 1 ? '' : 's'}
+              {savedProducts} saved favorite{savedProducts === 1 ? '' : 's'} synced to your account.
             </Text>
           </View>
         </View>
@@ -233,10 +223,6 @@ function ProfileContent() {
               placeholderTextColor={colors.textMuted}
               style={styles.input}
             />
-            <Pressable onPress={pickProfilePhoto} style={styles.secondaryButton} disabled={saving}>
-              <Camera width={16} height={16} stroke={colors.primary} />
-              <Text style={styles.secondaryButtonText}>{saving ? 'Saving Photo...' : 'Upload Profile Photo'}</Text>
-            </Pressable>
             {error ? <Text style={styles.profileError}>{error}</Text> : null}
           </View>
         </View>
@@ -258,6 +244,31 @@ function ProfileContent() {
           <Text style={styles.footerNote}>Profile details sync with your signed-in account.</Text>
         )}
       </ScrollView>
+
+      <Modal
+        visible={showPhotoPreview}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhotoPreview(false)}
+      >
+        <View style={styles.previewBackdrop}>
+          <Pressable style={styles.previewDismissLayer} onPress={() => setShowPhotoPreview(false)} />
+          <View style={styles.previewCard}>
+            <Pressable style={styles.previewCloseButton} onPress={() => setShowPhotoPreview(false)}>
+              <X width={20} height={20} stroke={colors.textOnPrimary} />
+            </Pressable>
+            <View style={styles.previewAvatarFrame}>
+              {profile.photoUri ? (
+                <Image source={{ uri: profile.photoUri }} style={styles.previewAvatarImage} contentFit="cover" />
+              ) : (
+                <View style={styles.previewDefaultAvatar}>
+                  <DefaultAvatar />
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -537,10 +548,10 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    justifyContent: 'center',
   },
   statItem: {
-    flex: 1,
+    width: 120,
     alignItems: 'center',
   },
   statItemPressed: {
@@ -602,23 +613,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     ...typography.body,
   },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: radius.full,
-    backgroundColor: colors.accentLight,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  secondaryButtonText: {
-    ...typography.captionBold,
-    color: colors.primary,
-  },
   settingsItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -644,5 +638,53 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xl,
     paddingHorizontal: spacing.xl,
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(42, 11, 38, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  previewDismissLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    padding: spacing.lg,
+    ...shadows.md,
+  },
+  previewCloseButton: {
+    alignSelf: 'flex-end',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  previewAvatarFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewAvatarImage: {
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: colors.skeleton,
+  },
+  previewDefaultAvatar: {
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: colors.softGold,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

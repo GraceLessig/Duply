@@ -74,7 +74,6 @@ export default function SearchResultsScreen() {
           router.push({
             pathname: '/productDetails',
             params: {
-              dupeId: item.id,
               originalId: item.original.id,
               dupeProductId: item.dupe.id,
               similarity: String(item.similarity),

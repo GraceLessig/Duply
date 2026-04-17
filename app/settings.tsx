@@ -73,7 +73,7 @@ export default function SettingsScreen() {
           <InfoRow
             icon={User}
             title="Saved Items"
-            value="Product pages and comparisons saved on this device"
+            value="Favorite product pages saved on this device"
           />
         </View>
       </ScrollView>

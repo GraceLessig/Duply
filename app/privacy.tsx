@@ -30,7 +30,7 @@ export default function PrivacyScreen() {
         />
         <Section
           title="2. App Usage Information"
-          body="Duply may store saved products, saved comparisons, recent searches, recent views, and similar app activity to power product features and improve your experience."
+          body="Duply may store saved favorite products, recent searches, recent views, and similar app activity to power product features and improve your experience."
         />
         <Section
           title="3. Device and Technical Data"
@@ -38,7 +38,7 @@ export default function PrivacyScreen() {
         />
         <Section
           title="4. How Information Is Used"
-          body="Information may be used to authenticate users, sync profile settings, provide saved items and recent activity, return product comparisons, show price-match offers, improve the app, and maintain security."
+          body="Information may be used to authenticate users, sync profile settings, provide saved favorites and recent activity, return product comparisons, show price-match offers, improve the app, and maintain security."
         />
         <Section
           title="5. Third-Party Services"

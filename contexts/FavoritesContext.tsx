@@ -6,19 +6,11 @@ const STORAGE_KEY = '@duply_favorites';
 
 export interface FavoriteItem {
   id: string;
-  kind?: 'product' | 'comparison';
   originalId?: string;
-  dupeProductId?: string;
   originalName: string;
   originalBrand: string;
   originalPrice: number;
   originalImage: string;
-  dupeName: string;
-  dupeBrand: string;
-  dupePrice: number;
-  dupeImage: string;
-  similarity: number;
-  matchReason?: string;
   savings: number;
   savedAt: number;
 }
@@ -43,28 +35,35 @@ export const FavoritesContext = createContext<FavoritesContextValue>({
   toggleFavorite: () => {},
 });
 
+function normalizeFavorite(item: any): FavoriteItem | null {
+  const kind = item?.kind || (item?.dupeProductId ? 'comparison' : 'product');
+  if (kind !== 'product') {
+    return null;
+  }
+
+  const id = String(item?.originalId || item?.id || '').trim();
+  const originalName = String(item?.originalName || '').trim();
+  const originalBrand = String(item?.originalBrand || '').trim();
+
+  if (!id || !originalName || !originalBrand) {
+    return null;
+  }
+
+  return {
+    id,
+    originalId: id,
+    originalName,
+    originalBrand,
+    originalPrice: Number(item?.originalPrice || 0),
+    originalImage: String(item?.originalImage || '').trim(),
+    savings: Number(item?.savings || 0),
+    savedAt: Number(item?.savedAt || Date.now()),
+  };
+}
+
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const json = await AsyncStorage.getItem(STORAGE_KEY);
-        if (json) {
-          const parsed = JSON.parse(json) as FavoriteItem[];
-          setFavorites(parsed.map(item => ({
-            kind: item.kind || (item.dupeProductId ? 'comparison' : 'product'),
-            ...item,
-          })));
-        }
-      } catch {
-        // Storage unavailable
-      } finally {
-        setLoaded(true);
-      }
-    })();
-  }, []);
 
   const persist = useCallback(async (items: FavoriteItem[]) => {
     try {
@@ -73,6 +72,28 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       // Persist error
     }
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(STORAGE_KEY);
+        if (json) {
+          const parsed = JSON.parse(json) as any[];
+          const normalized = parsed
+            .map(normalizeFavorite)
+            .filter((item): item is FavoriteItem => Boolean(item));
+          setFavorites(normalized);
+          if (normalized.length !== parsed.length) {
+            void persist(normalized);
+          }
+        }
+      } catch {
+        // Storage unavailable
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [persist]);
 
   useEffect(() => {
     if (!loaded || favorites.length === 0) {
@@ -85,15 +106,8 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       try {
         const checks = await Promise.all(
           favorites.map(async item => {
-            if ((item.kind || 'comparison') === 'comparison') {
-              const [original, dupe] = await Promise.all([
-                item.originalId ? getProductByIdFromBackend(item.originalId) : Promise.resolve(null),
-                item.dupeProductId ? getProductByIdFromBackend(item.dupeProductId) : Promise.resolve(null),
-              ]);
-              return Boolean(original && dupe);
-            }
-
-            return item.originalId ? Boolean(await getProductByIdFromBackend(item.originalId)) : true;
+            const productId = item.originalId || item.id;
+            return productId ? Boolean(await getProductByIdFromBackend(productId)) : false;
           })
         );
 
@@ -120,30 +134,32 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   const addFavorite = useCallback((item: Omit<FavoriteItem, 'savedAt'>) => {
     setFavorites(prev => {
-      if (prev.some(f => f.id === item.id)) return prev;
+      if (prev.some(favorite => favorite.id === item.id)) {
+        return prev;
+      }
       const updated = [{ ...item, savedAt: Date.now() }, ...prev];
-      persist(updated);
+      void persist(updated);
       return updated;
     });
   }, [persist]);
 
   const removeFavorite = useCallback((id: string) => {
     setFavorites(prev => {
-      const updated = prev.filter(f => f.id !== id);
-      persist(updated);
+      const updated = prev.filter(item => item.id !== id);
+      void persist(updated);
       return updated;
     });
   }, [persist]);
 
   const clearFavorites = useCallback(() => {
     setFavorites(() => {
-      persist([]);
+      void persist([]);
       return [];
     });
   }, [persist]);
 
   const isFavorite = useCallback((id: string) => {
-    return favorites.some(f => f.id === id);
+    return favorites.some(item => item.id === id);
   }, [favorites]);
 
   const toggleFavorite = useCallback((item: Omit<FavoriteItem, 'savedAt'>) => {
@@ -152,12 +168,10 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     } else {
       addFavorite(item);
     }
-  }, [isFavorite, addFavorite, removeFavorite]);
+  }, [addFavorite, isFavorite, removeFavorite]);
 
   return (
-    <FavoritesContext.Provider
-      value={{ favorites, loaded, addFavorite, removeFavorite, clearFavorites, isFavorite, toggleFavorite }}
-    >
+    <FavoritesContext.Provider value={{ favorites, loaded, addFavorite, removeFavorite, clearFavorites, isFavorite, toggleFavorite }}>
       {children}
     </FavoritesContext.Provider>
   );

@@ -26,7 +26,7 @@ export default function TermsScreen() {
 
         <Section
           title="1. What Duply Does"
-          body="Duply helps users search beauty products, compare possible dupes, save products and comparisons, and review live price-match offers from third-party retailers."
+          body="Duply helps users search beauty products, compare possible dupes, save favorite products, and review live price-match offers from third-party retailers."
         />
         <Section
           title="2. Informational Use"
