@@ -374,7 +374,15 @@ def _extract_candidates(result, fallback_brand=""):
 
 
 def _fetch_product_info(candidate):
-    identifier = candidate.get("product_id") or candidate.get("data_docid") or candidate.get("gid")
+    raw = candidate.get("raw") if isinstance(candidate, dict) else {}
+    identifier = (
+        candidate.get("product_id")
+        or candidate.get("data_docid")
+        or candidate.get("gid")
+        or (raw or {}).get("product_id")
+        or (raw or {}).get("data_docid")
+        or (raw or {}).get("gid")
+    )
     if not identifier or not _has_dataforseo_credentials():
         return {}
     key = ("product-info", normalize_text(identifier))
@@ -382,8 +390,9 @@ def _fetch_product_info(candidate):
     if cached is not None:
         return cached
     task = {**_task_defaults(), "product_id": identifier}
-    if candidate.get("data_docid"):
-        task["data_docid"] = candidate["data_docid"]
+    data_docid = candidate.get("data_docid") or (raw or {}).get("data_docid")
+    if data_docid:
+        task["data_docid"] = data_docid
     try:
         task_id = _post_task("/v3/merchant/google/product_info/task_post", task)
         results = _poll_task("/v3/merchant/google/product_info/task_get/advanced/{task_id}", task_id)
@@ -631,32 +640,125 @@ def get_web_product_by_id(product_id):
     return _web_product_cache.get(product_id)
 
 
-def find_price_matches(brand, product_name, limit=8):
+def _candidate_direct_offer(candidate, brand, product_name):
+    title = str(candidate.get("product_name") or candidate.get("title") or "").strip()
+    url = str(candidate.get("title-href") or candidate.get("shopping_url") or candidate.get("raw", {}).get("productUrl") or "").strip()
+    price = _extract_price(candidate.get("price"))
+    confidence = title_match_confidence(title or product_name, brand, product_name)
+    if not title or not url or price <= 0 or confidence < 35 or not is_live_product_url(url):
+        return None
+    digest = hashlib.sha1(f"{title}|{url}".encode("utf-8")).hexdigest()[:14]
+    return {
+        "id": f"offer-{digest}",
+        "retailer": candidate.get("website") or _source_domain(url),
+        "title": title,
+        "price": price,
+        "url": url,
+        "image": candidate.get("image") or "",
+        "shipping": "",
+        "source": candidate.get("source") or "dataforseo",
+        "matchConfidence": confidence,
+        "rank": 999,
+    }
+
+
+def _query_variants(brand, product_name):
+    variants = []
+    seen = set()
+    for value in [
+        f"{brand} {product_name}".strip(),
+        product_name.strip(),
+        f"{brand} {product_name} makeup".strip(),
+        f"{brand} {product_name} cosmetics".strip(),
+    ]:
+        normalized = normalize_text(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            variants.append(value)
+    return variants
+
+
+def find_price_matches(brand, product_name, product_url="", limit=8):
     if not product_name or not _has_dataforseo_credentials():
         return []
-    key = ("price-match", normalize_text(brand), normalize_text(product_name), limit)
+    key = ("price-match", normalize_text(brand), normalize_text(product_name), normalize_text(product_url), limit)
     cached = _cache_get(_price_match_cache, key)
     if cached is not None:
         return cached
     offers, seen = [], set()
-    for candidate in search_web_products(f"{brand} {product_name}".strip(), max(limit * 2, 8)):
-        merchant_offers = candidate.get("merchantOffers") or candidate.get("raw", {}).get("merchantOffers") or _extract_offers(_fetch_product_info(candidate.get("raw", {})), candidate.get("product_name"))
-        for index, offer in enumerate(merchant_offers):
-            title, url, price = str(offer.get("title") or candidate.get("product_name") or "").strip(), str(offer.get("url") or "").strip(), _extract_price(offer.get("price"))
-            confidence = title_match_confidence(title, brand, product_name)
-            if not title or not url or price <= 0 or confidence < 45 or not is_live_product_url(url):
-                continue
-            dedupe_key = (normalize_text(offer.get("retailer")), normalize_text(title), round(price, 2))
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            digest = hashlib.sha1(f"{title}|{url}".encode("utf-8")).hexdigest()[:14]
-            offers.append({"id": f"offer-{digest}", "retailer": offer.get("retailer") or _source_domain(url), "title": title, "price": price, "url": url, "image": candidate.get("image") or "", "shipping": offer.get("shipping") or "", "source": "dataforseo", "matchConfidence": confidence, "rank": index})
-            if len(offers) >= limit:
-                _cache_set(_price_match_cache, key, offers[:limit])
-                return offers[:limit]
-    _cache_set(_price_match_cache, key, offers[:limit])
-    return offers[:limit]
+
+    if product_url and is_live_product_url(product_url):
+        direct_digest = hashlib.sha1(f"{brand}|{product_name}|{product_url}".encode("utf-8")).hexdigest()[:14]
+        offers.append({
+            "id": f"offer-{direct_digest}",
+            "retailer": _source_domain(product_url),
+            "title": f"{brand} {product_name}".strip(),
+            "price": 0,
+            "url": product_url,
+            "image": "",
+            "shipping": "",
+            "source": "product-url",
+            "matchConfidence": 100,
+            "rank": 0,
+        })
+
+    for query in _query_variants(brand, product_name):
+        for candidate in search_web_products(query, max(limit * 4, 12)):
+            product_info = _fetch_product_info(candidate)
+            merchant_offers = candidate.get("merchantOffers") or candidate.get("raw", {}).get("merchantOffers") or _extract_offers(product_info, candidate.get("product_name"))
+            for index, offer in enumerate(merchant_offers):
+                title, url, price = str(offer.get("title") or candidate.get("product_name") or "").strip(), str(offer.get("url") or "").strip(), _extract_price(offer.get("price"))
+                confidence = title_match_confidence(title, brand, product_name)
+                if not title or not url or price <= 0 or confidence < 35 or not is_live_product_url(url):
+                    continue
+                dedupe_key = (normalize_text(offer.get("retailer")), normalize_text(title), normalize_text(url))
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                digest = hashlib.sha1(f"{title}|{url}".encode("utf-8")).hexdigest()[:14]
+                offers.append({"id": f"offer-{digest}", "retailer": offer.get("retailer") or _source_domain(url), "title": title, "price": price, "url": url, "image": candidate.get("image") or "", "shipping": offer.get("shipping") or "", "source": "dataforseo", "matchConfidence": confidence, "rank": index})
+                if len([offer for offer in offers if offer.get("price", 0) > 0]) >= limit:
+                    break
+
+            direct_offer = _candidate_direct_offer(candidate, brand, product_name)
+            if direct_offer:
+                dedupe_key = (normalize_text(direct_offer.get("retailer")), normalize_text(direct_offer.get("title")), normalize_text(direct_offer.get("url")))
+                if dedupe_key not in seen:
+                    seen.add(dedupe_key)
+                    offers.append(direct_offer)
+
+        if len([offer for offer in offers if offer.get("price", 0) > 0]) >= limit:
+            break
+
+    deduped = []
+    final_seen = set()
+    for offer in offers:
+        title, url, price = str(offer.get("title") or "").strip(), str(offer.get("url") or "").strip(), _extract_price(offer.get("price"))
+        confidence = title_match_confidence(title or product_name, brand, product_name)
+        if not title or not url or confidence < 35 or not is_live_product_url(url):
+            continue
+        dedupe_key = (normalize_text(offer.get("retailer")), normalize_text(title), normalize_text(url))
+        if dedupe_key in final_seen:
+            continue
+        final_seen.add(dedupe_key)
+        normalized_offer = {
+            **offer,
+            "price": price,
+            "matchConfidence": confidence,
+        }
+        deduped.append(normalized_offer)
+
+    deduped.sort(
+        key=lambda offer: (
+            offer.get("price", 0) <= 0,
+            offer.get("price", 0) if offer.get("price", 0) > 0 else 10**9,
+            -(offer.get("matchConfidence") or 0),
+            normalize_text(offer.get("retailer")),
+        )
+    )
+
+    _cache_set(_price_match_cache, key, deduped[:limit])
+    return deduped[:limit]
 
 
 def _brand_seed_queries(brand, categories):

@@ -819,7 +819,7 @@ async def get_price_matches(request: Request):
             if normalized_offers:
                 return _cache_set(cache_key, normalized_offers[:3])
 
-        return _cache_set(cache_key, find_price_matches(brand, name, limit=3))
+        return _cache_set(cache_key, find_price_matches(brand, name, product_url=body.get("productUrl", ""), limit=3))
     except HTTPException:
         raise
     except Exception as e:
