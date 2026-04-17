@@ -32,7 +32,7 @@ export default function FavoritesScreen() {
         <View>
           <Text style={styles.title}>Saved</Text>
           <Text style={styles.subtitle}>
-            {activeItems.length} {activeView === 'favorites' ? 'favorite' : 'comparison'}
+            {activeItems.length} {activeView === 'favorites' ? 'favorite' : 'dupe'}
             {activeItems.length === 1 ? '' : 's'} saved
           </Text>
         </View>
@@ -48,7 +48,7 @@ export default function FavoritesScreen() {
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         <View style={styles.chooserCard}>
           <Text style={styles.chooserTitle}>Choose a saved view</Text>
-          <Text style={styles.chooserSubtitle}>Open your saved favorites or your saved dupe comparisons.</Text>
+          <Text style={styles.chooserSubtitle}>Open your saved favorites or your saved dupes.</Text>
 
           <View style={styles.viewToggle}>
             <Pressable
@@ -69,7 +69,7 @@ export default function FavoritesScreen() {
             >
               <Star width={16} height={16} stroke={activeView === 'comparisons' ? colors.textOnPrimary : colors.primary} />
               <View>
-                <Text style={[styles.viewToggleText, activeView === 'comparisons' && styles.viewToggleTextActive]}>Comparisons</Text>
+                <Text style={[styles.viewToggleText, activeView === 'comparisons' && styles.viewToggleTextActive]}>Dupes</Text>
                 <Text style={[styles.viewToggleMeta, activeView === 'comparisons' && styles.viewToggleMetaActive]}>
                   {comparisonFavorites.length} saved
                 </Text>
@@ -89,12 +89,12 @@ export default function FavoritesScreen() {
                 )}
               </View>
               <Text style={styles.emptyTitle}>
-                {activeView === 'favorites' ? 'No favorites saved yet' : 'No comparisons saved yet'}
+                {activeView === 'favorites' ? 'No favorites saved yet' : 'No dupes saved yet'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {activeView === 'favorites'
                   ? 'Tap the heart on a product page to save it here.'
-                  : 'Tap the star on a dupe comparison page to save the full comparison here.'}
+                  : 'Tap the star on a dupe comparison page to save the full dupe here.'}
               </Text>
               <Link href="/search" asChild>
                 <Pressable style={styles.button}>
@@ -105,7 +105,7 @@ export default function FavoritesScreen() {
           </View>
         ) : (
           <SavedSection
-            title={activeView === 'favorites' ? 'Favorites' : 'Saved Comparisons'}
+            title={activeView === 'favorites' ? 'Favorites' : 'Saved Dupes'}
             subtitle={`${activeItems.length} saved`}
             items={activeItems}
             removeFavorite={removeFavorite}

@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Bookmark, Camera, DollarSign, Info, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
+import { Camera, DollarSign, Heart, Info, LogOut, RefreshCw, Settings, Star, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
@@ -149,7 +149,6 @@ function ProfileContent() {
   const { favorites } = useFavorites();
   const { profile, loaded, saving, error, updateProfile, uploadProfilePhoto, resetProfile } = useProfile();
 
-  const savedItems = favorites.length;
   const totalSavings = favorites.reduce((sum, item) => sum + item.savings, 0);
   const savedProducts = favorites.filter(item => (item.kind || 'comparison') === 'product').length;
   const savedComparisons = favorites.filter(item => (item.kind || 'comparison') === 'comparison').length;
@@ -199,29 +198,27 @@ function ProfileContent() {
         <View style={styles.statsWrapper}>
           <View style={styles.statsCard}>
             <View style={styles.statsRow}>
-              <StatItem icon={Bookmark} value={savedItems} label="Saved" bg={colors.accentLight} color={colors.primary} />
+              <StatItem
+                icon={Heart}
+                value={savedProducts}
+                label="Favorites"
+                bg={colors.accentLight}
+                color={colors.primary}
+                onPress={() => router.push({ pathname: '/favorites', params: { view: 'favorites' } } as Href)}
+              />
               <StatItem icon={DollarSign} value={`$${totalSavings.toFixed(0)}`} label="Savings" bg={colors.successLight} color={colors.success} />
-              <StatItem icon={Star} value={savedComparisons} label="Comparisons" bg={colors.cream} color={colors.primary} />
+              <StatItem
+                icon={Star}
+                value={savedComparisons}
+                label="Dupes"
+                bg={colors.cream}
+                color={colors.primary}
+                onPress={() => router.push({ pathname: '/favorites', params: { view: 'comparisons' } } as Href)}
+              />
             </View>
             <Text style={styles.statsCaption}>
-              {savedProducts} saved product page{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe comparison{savedComparisons === 1 ? '' : 's'}
+              {savedProducts} saved favorite{savedProducts === 1 ? '' : 's'} and {savedComparisons} saved dupe{savedComparisons === 1 ? '' : 's'}
             </Text>
-            <View style={styles.savedLinksRow}>
-              <Pressable
-                onPress={() => router.push({ pathname: '/favorites', params: { view: 'favorites' } } as Href)}
-                style={styles.savedLinkButton}
-              >
-                <Bookmark width={16} height={16} stroke={colors.primary} />
-                <Text style={styles.savedLinkText}>Favorites</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push({ pathname: '/favorites', params: { view: 'comparisons' } } as Href)}
-                style={styles.savedLinkButton}
-              >
-                <Star width={16} height={16} stroke={colors.primary} />
-                <Text style={styles.savedLinkText}>Comparisons</Text>
-              </Pressable>
-            </View>
           </View>
         </View>
 
@@ -265,15 +262,15 @@ function ProfileContent() {
   );
 }
 
-function StatItem({ icon: Icon, value, label, bg, color }: any) {
+function StatItem({ icon: Icon, value, label, bg, color, onPress }: any) {
   return (
-    <View style={styles.statItem}>
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.statItem, pressed && onPress && styles.statItemPressed]}>
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
         <Icon width={20} height={20} stroke={color} />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -546,6 +543,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  statItemPressed: {
+    opacity: 0.8,
+  },
   statIcon: {
     width: 44,
     height: 44,
@@ -568,28 +568,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.md,
     textAlign: 'center',
-  },
-  savedLinksRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  savedLinkButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: radius.full,
-    backgroundColor: colors.accentLight,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  savedLinkText: {
-    ...typography.smallBold,
-    color: colors.primary,
   },
   section: {
     paddingHorizontal: spacing.lg,
