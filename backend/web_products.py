@@ -106,6 +106,11 @@ CATEGORY_QUERY_VARIANTS = {
 
 _allowed_brands = None
 _search_cache, _image_cache, _web_product_cache, _price_match_cache, _url_status_cache = {}, {}, {}, {}, {}
+NON_US_COUNTRY_TLDS = {
+    ".ae", ".au", ".be", ".br", ".ca", ".ch", ".cn", ".de", ".dk", ".es",
+    ".eu", ".fr", ".hk", ".ie", ".in", ".it", ".jp", ".kr", ".mx", ".nl",
+    ".no", ".nz", ".pl", ".se", ".sg", ".tr", ".tw", ".uk", ".vn", ".za",
+}
 
 
 def _cache_ttl(cache):
@@ -225,8 +230,21 @@ def _source_domain(url):
     return match.group(1).lower() if match else ""
 
 
+def _is_us_domain(domain):
+    domain = normalize_text(domain)
+    if not domain:
+        return False
+
+    if any(domain.endswith(tld) for tld in NON_US_COUNTRY_TLDS):
+        return False
+
+    return domain.endswith(".com") or domain.endswith(".us")
+
+
 def is_approved_retailer_url(url):
-    return str(url or "").strip().startswith(("http://", "https://")) and "." in _source_domain(url)
+    url = str(url or "").strip()
+    domain = _source_domain(url)
+    return url.startswith(("http://", "https://")) and "." in domain and _is_us_domain(domain)
 
 
 def _looks_like_missing_page(page_html, final_url=""):
@@ -259,7 +277,7 @@ def is_live_product_url(url):
 
 def _find_source_page_image(product_url):
     product_url = str(product_url or "").strip()
-    if not SOURCE_IMAGE_LOOKUP_ENABLED or not product_url:
+    if not SOURCE_IMAGE_LOOKUP_ENABLED or not product_url or not is_approved_retailer_url(product_url):
         return ""
     key = ("source-image", normalize_text(product_url))
     cached = _cache_get(_image_cache, key)
@@ -522,9 +540,15 @@ def _extract_product_info_title(product_info, fallback_title=""):
 def _normalize_candidate(candidate, product_info=None):
     product_info = product_info or {}
     title = _extract_product_info_title(product_info, str(candidate.get("title") or "").strip())
-    offers = _extract_offers(product_info, title)
+    offers = [
+        offer for offer in _extract_offers(product_info, title)
+        if is_approved_retailer_url(offer.get("url"))
+    ]
     best_offer = offers[0] if offers else None
-    product_url = (best_offer or {}).get("url") or candidate.get("shopping_url") or ""
+    candidate_url = str(candidate.get("shopping_url") or "").strip()
+    if candidate_url and not is_approved_retailer_url(candidate_url):
+        candidate_url = ""
+    product_url = (best_offer or {}).get("url") or candidate_url or ""
     image = candidate.get("image") or _find_source_page_image(product_url)
     product_type = normalize_product_type(_infer_product_type(title))
     brand = candidate.get("brand") or _find_supported_brand(title)

@@ -897,8 +897,9 @@ def _normalize_upsert_product(product):
         "lastSeenAt": product.get("lastSeenAt") or int(time.time()),
         "lastValidatedAt": product.get("lastValidatedAt") or int(time.time()),
         "releaseYear": product.get("releaseYear") or product.get("raw", {}).get("releaseYear"),
-        "raw": product.get("raw") or {},
     }
+    if product.get("raw"):
+        payload["raw"] = product.get("raw")
     return payload
 
 

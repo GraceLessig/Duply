@@ -103,8 +103,10 @@ export default function ProductDetailsScreen() {
     let active = true;
 
     const loadPriceMatches = async () => {
-      if (!original?.name) {
+      if (isComparisonView || !original?.name) {
         setPriceOffers([]);
+        setPriceOffersLoading(false);
+        setPriceOffersError('');
         return;
       }
 
@@ -132,7 +134,7 @@ export default function ProductDetailsScreen() {
     return () => {
       active = false;
     };
-  }, [original]);
+  }, [isComparisonView, original]);
 
   if (loading) {
     return (
@@ -293,48 +295,50 @@ export default function ProductDetailsScreen() {
           </Animated.View>
         )}
 
-        <Animated.View entering={FadeInDown.delay(175).duration(400)}>
-          <Text style={styles.sectionTitle}>Price Match Results</Text>
-          <View style={styles.priceMatchBox}>
-            <View style={styles.priceMatchHeader}>
-              <View>
-                <Text style={styles.priceMatchEyebrow}>Top 3 live retailer offers</Text>
-                <Text style={styles.priceMatchTitle}>
-                  {priceOffers[0] ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}` : 'Checking retailers'}
-                </Text>
+        {!isComparisonView && (
+          <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+            <Text style={styles.sectionTitle}>Price Match Results</Text>
+            <View style={styles.priceMatchBox}>
+              <View style={styles.priceMatchHeader}>
+                <View>
+                  <Text style={styles.priceMatchEyebrow}>Top 3 live retailer offers</Text>
+                  <Text style={styles.priceMatchTitle}>
+                    {priceOffers[0] ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}` : 'Checking retailers'}
+                  </Text>
+                </View>
+                {priceOffersLoading ? <Text style={styles.priceMatchStatus}>Live search...</Text> : null}
               </View>
-              {priceOffersLoading ? <Text style={styles.priceMatchStatus}>Live search...</Text> : null}
-            </View>
 
-            {priceOffersError ? <Text style={styles.priceMatchError}>{priceOffersError}</Text> : null}
+              {priceOffersError ? <Text style={styles.priceMatchError}>{priceOffersError}</Text> : null}
 
-            {!priceOffersLoading && !priceOffersError && priceOffers.length === 0 ? (
-              <Text style={styles.priceMatchEmpty}>No live shopping links found right now.</Text>
-            ) : null}
+              {!priceOffersLoading && !priceOffersError && priceOffers.length === 0 ? (
+                <Text style={styles.priceMatchEmpty}>No live shopping links found right now.</Text>
+              ) : null}
 
-            {priceOffers.slice(0, 3).map((offer, index) => (
-              <TouchableOpacity
-                key={offer.id}
-                activeOpacity={0.86}
-                style={[styles.offerRow, index === 0 && styles.bestOfferRow]}
-                onPress={() => openOffer(offer)}
-              >
-                <View style={styles.offerInfo}>
-                  <View style={styles.offerMetaRow}>
-                    <Text style={styles.offerRetailer}>{offer.retailer}</Text>
-                    {index === 0 ? <Text style={styles.bestOfferPill}>Best price</Text> : null}
+              {priceOffers.slice(0, 3).map((offer, index) => (
+                <TouchableOpacity
+                  key={offer.id}
+                  activeOpacity={0.86}
+                  style={[styles.offerRow, index === 0 && styles.bestOfferRow]}
+                  onPress={() => openOffer(offer)}
+                >
+                  <View style={styles.offerInfo}>
+                    <View style={styles.offerMetaRow}>
+                      <Text style={styles.offerRetailer}>{offer.retailer}</Text>
+                      {index === 0 ? <Text style={styles.bestOfferPill}>Best price</Text> : null}
+                    </View>
+                    <Text style={styles.offerTitle} numberOfLines={2}>{offer.title}</Text>
+                    {offer.shipping ? <Text style={styles.offerShipping} numberOfLines={1}>{offer.shipping}</Text> : null}
                   </View>
-                  <Text style={styles.offerTitle} numberOfLines={2}>{offer.title}</Text>
-                  {offer.shipping ? <Text style={styles.offerShipping} numberOfLines={1}>{offer.shipping}</Text> : null}
-                </View>
-                <View style={styles.offerAction}>
-                  <Text style={styles.offerPrice}>${offer.price.toFixed(2)}</Text>
-                  <Feather name="external-link" size={16} color={colors.primary} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
+                  <View style={styles.offerAction}>
+                    <Text style={styles.offerPrice}>${offer.price.toFixed(2)}</Text>
+                    <Feather name="external-link" size={16} color={colors.primary} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         {isComparisonView && (
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>

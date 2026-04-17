@@ -16,6 +16,7 @@ from firestore_products import (
     list_products_by_category,
     normalize_product_type,
     search_firestore_products,
+    upsert_firestore_products,
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
 from web_products import (
@@ -235,6 +236,23 @@ def _product_from_record(record, fallback=None, enrich_image=False):
     product_url = record.get("title-href") or raw.get("productUrl") or raw.get("title-href") or ""
     if enrich_image and not image:
         image = find_product_image(brand, name, product_url)
+        if image and explicit_id:
+            try:
+                upsert_firestore_products([{
+                    "id": explicit_id,
+                    "brand": brand,
+                    "product_name": name,
+                    "category": category,
+                    "type": product_type,
+                    "price": record.get("price") if record.get("price") is not None else fallback.get("price"),
+                    "rating": record.get("rating") if record.get("rating") is not None else fallback.get("rating"),
+                    "image": image,
+                    "productUrl": product_url,
+                    "source": record.get("source") or raw.get("source") or "catalog",
+                    "raw": {**raw, "productUrl": product_url or raw.get("productUrl") or raw.get("title-href") or ""},
+                }])
+            except Exception:
+                pass
 
     return {
         "id": explicit_id or _slugify(f"{brand}-{name}"),
@@ -495,6 +513,43 @@ def _directly_available_product(record, fallback=None, enrich_image=False, requi
     return normalized_product
 
 
+def _ensure_product_image(product):
+    if not product:
+        return None
+    if product.get("image"):
+        return product
+
+    product_url = product.get("productUrl") or ""
+    if not product_url:
+        return product
+
+    image = find_product_image(product.get("brand"), product.get("name"), product_url)
+    if not image:
+        return product
+
+    enriched = {
+        **product,
+        "image": image,
+    }
+    try:
+        upsert_firestore_products([{
+            "id": enriched.get("id"),
+            "brand": enriched.get("brand"),
+            "product_name": enriched.get("name"),
+            "category": enriched.get("category"),
+            "type": enriched.get("productType"),
+            "price": enriched.get("price"),
+            "rating": enriched.get("rating"),
+            "image": image,
+            "productUrl": enriched.get("productUrl"),
+            "source": enriched.get("source") or "catalog",
+        }])
+    except Exception:
+        pass
+
+    return enriched
+
+
 def _candidate_key(record):
     return (
         _normalize_text(record.get("brand")),
@@ -700,9 +755,10 @@ def search_products_page(q: str, page: int = 1, page_size: int = 24, sort: str =
     safe_page = min(normalized_page, total_pages)
     start = (safe_page - 1) * normalized_page_size
     end = start + normalized_page_size
+    page_items = [_ensure_product_image(product) for product in combined[start:end]]
 
     return _cache_set(cache_key, {
-        "items": combined[start:end],
+        "items": page_items,
         "total": total,
         "page": safe_page,
         "pageSize": normalized_page_size,
@@ -733,7 +789,7 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
         )
         if not normalized_product:
             continue
-        available_items.append(normalized_product)
+        available_items.append(_ensure_product_image(normalized_product))
 
     available_items = _dedupe_products(available_items)
 
@@ -776,7 +832,7 @@ def _legacy_category_products(category_or_type: str):
         )
         if not normalized_product:
             continue
-        available_items.append(normalized_product)
+        available_items.append(_ensure_product_image(normalized_product))
     return _dedupe_products(available_items)
 
 
@@ -800,10 +856,10 @@ async def get_price_matches(request: Request):
             product = get_firestore_product_by_id(product_id)
             merchant_offers = ((product or {}).get("raw") or {}).get("merchantOffers") or []
             normalized_offers = []
-            for index, offer in enumerate(merchant_offers[:3]):
+            for index, offer in enumerate(merchant_offers):
                 url = offer.get("url") or ""
                 price = _normalize_price(offer.get("price"))
-                if not url or price <= 0:
+                if not url or price <= 0 or not is_approved_retailer_url(url) or not is_live_product_url(url):
                     continue
                 normalized_offers.append({
                     "id": offer.get("id") or f"stored-offer-{index}",
@@ -816,6 +872,8 @@ async def get_price_matches(request: Request):
                     "source": offer.get("source") or "catalog",
                     "matchConfidence": offer.get("matchConfidence") or 100,
                 })
+                if len(normalized_offers) >= 3:
+                    break
             if normalized_offers:
                 return _cache_set(cache_key, normalized_offers[:3])
 
@@ -845,7 +903,7 @@ def get_product(product_id: str):
     )
     if not normalized_product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return _cache_set(cache_key, normalized_product)
+    return _cache_set(cache_key, _ensure_product_image(normalized_product))
 
 
 @app.post("/dupes")
@@ -919,6 +977,7 @@ async def get_dupes(request: Request):
                 "raw": {},
             }, require_image=False)
         original = _resolve_live_product(original) or original
+        original = _ensure_product_image(original)
 
         if not original:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -939,6 +998,7 @@ async def get_dupes(request: Request):
             )
             dupe = _finalize_product(dupe, require_image=False)
             dupe = _resolve_live_product(dupe) or dupe
+            dupe = _ensure_product_image(dupe)
             if not dupe:
                 continue
             savings = max(original["price"] - dupe["price"], 0)
