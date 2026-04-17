@@ -577,6 +577,118 @@ def _merge_ranked_candidates(*candidate_groups):
     return merged
 
 
+def _dupe_query_tokens(brand: str, name: str):
+    stopwords = {
+        "the", "and", "for", "with", "new", "mini", "travel", "shade",
+        "beauty", "rare", "makeup", "cosmetics", "product", "stick",
+    }
+    excluded = {token for token in re.findall(r"[a-z0-9]+", _normalize_text(brand)) if token}
+    tokens = []
+    for token in re.findall(r"[a-z0-9]+", _normalize_text(name)):
+        if len(token) <= 2 or token in stopwords or token in excluded:
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def _fallback_dupe_record_score(original_product, candidate_product, name_tokens):
+    score = 0.0
+    original_type = normalize_product_type(original_product.get("productType") or original_product.get("category"))
+    candidate_type = normalize_product_type(candidate_product.get("productType") or candidate_product.get("category"))
+    if original_type and candidate_type == original_type:
+        score += 35
+
+    original_category = _normalize_text(original_product.get("category"))
+    candidate_category = _normalize_text(candidate_product.get("category"))
+    if original_category and candidate_category == original_category:
+        score += 10
+
+    candidate_name = _normalize_text(candidate_product.get("name"))
+    token_matches = sum(1 for token in name_tokens if token in candidate_name)
+    if name_tokens:
+        score += (token_matches / len(name_tokens)) * 35
+
+    original_price = _normalize_price(original_product.get("price"))
+    candidate_price = _normalize_price(candidate_product.get("price"))
+    if original_price > 0 and candidate_price > 0:
+        relative_diff = abs(original_price - candidate_price) / max(original_price, candidate_price)
+        score += max(0, 1 - relative_diff) * 20
+
+    if _normalize_text(original_product.get("brand")) == _normalize_text(candidate_product.get("brand")):
+        score -= 20
+
+    return round(score, 3)
+
+
+def _fallback_dupe_candidates(original_product, brand: str, name: str, product_type: str, category: str, limit: int = 20):
+    if not original_product:
+        return []
+
+    seen = set()
+    candidates = []
+    name_tokens = _dupe_query_tokens(brand, name)
+    target_bucket = product_type or category
+    source_records = []
+
+    if target_bucket:
+        try:
+            category_page = list_products_by_category(target_bucket, limit=80, page=1)
+            source_records.extend(category_page.get("items") or [])
+        except Exception:
+            pass
+
+    for query in filter(None, [name, f"{brand} {name}".strip(), " ".join(name_tokens[:3]).strip()]):
+        try:
+            source_records.extend(search_firestore_products(query, limit=30))
+        except Exception:
+            continue
+
+    for record in source_records:
+        candidate = _coerce_to_display_product(
+            record,
+            fallback={"id": record.get("firestore_id", "")},
+            enrich_image=False,
+        )
+        if not candidate:
+            continue
+        identity = _product_identity_key(candidate)
+        if identity == _product_identity_key(original_product) or identity in seen:
+            continue
+        seen.add(identity)
+
+        score = _fallback_dupe_record_score(original_product, candidate, name_tokens)
+        if score < 35:
+            continue
+
+        candidates.append({
+            "record": {
+                "brand": candidate.get("brand"),
+                "product_name": candidate.get("name"),
+                "category": candidate.get("category"),
+                "subcategory": candidate.get("productType"),
+                "type": candidate.get("productType"),
+                "price": candidate.get("price"),
+                "rating": candidate.get("rating"),
+                "image": candidate.get("image"),
+                "firestore_id": candidate.get("id"),
+                "raw": {
+                    "productUrl": candidate.get("productUrl") or "",
+                    "source": candidate.get("source") or "catalog",
+                },
+            },
+            "score": score,
+        })
+
+    candidates.sort(
+        key=lambda item: (
+            -item.get("score", 0),
+            _normalize_text(item.get("record", {}).get("brand")),
+            _normalize_text(item.get("record", {}).get("product_name")),
+        )
+    )
+    return candidates[:limit]
+
+
 def _first_present(*values):
     for value in values:
         if value is not None and value != "":
@@ -1054,7 +1166,6 @@ async def get_dupes(request: Request):
         # Let backend metadata be the source of truth
         matched_product = lookup_product(query, preferred_type=product_type)
         model_results = find_dupes(query, preferred_type=product_type)
-        results = _merge_ranked_candidates(model_results)
         original_firestore = fetch_firestore_product({
             "brand": brand,
             "product_name": name,
@@ -1107,6 +1218,16 @@ async def get_dupes(request: Request):
 
         if not original:
             raise HTTPException(status_code=404, detail="Product not found")
+
+        fallback_results = _fallback_dupe_candidates(
+            original,
+            brand=brand,
+            name=name,
+            product_type=product_type,
+            category=category,
+            limit=24,
+        )
+        results = _merge_ranked_candidates(model_results, fallback_results)
 
         output = []
 
