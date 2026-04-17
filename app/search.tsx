@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Clock, Search, X } from 'react-native-feather';
-import SearchFlowLoader from '../components/SearchFlowLoader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useActivity } from '../hooks/useActivity';
@@ -72,11 +71,7 @@ export default function SearchScreen() {
 
         {loading ? (
           <View style={styles.suggestionsLoading}>
-            <SearchFlowLoader
-              compact
-              title="Following the search through the model"
-              subtitle="Reading the query, checking the catalog, and validating live product pages."
-            />
+            <Text style={styles.stateSubtitle}>Searching...</Text>
           </View>
         ) : error ? (
           <View style={styles.suggestionsState}>

@@ -10,8 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { Menu, Search, TrendingUp } from 'react-native-feather';
-import SearchFlowLoader from '../../components/SearchFlowLoader';
+import { Menu, Search, TrendingUp, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
 import { ProductCardSkeleton } from '../../components/SkeletonLoader';
@@ -83,13 +82,11 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Learn more about duply"
-          onPress={() => router.push('/about')}
-          style={({ pressed }) => pressed && styles.brandLogoPressed}
+          accessibilityLabel="Browse categories"
+          onPress={() => router.push('/categories')}
+          style={styles.menuBtn}
         >
-          <View style={styles.brandLogoFrame}>
-            <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogoImage} contentFit="contain" />
-          </View>
+          <Menu width={24} height={24} stroke={colors.primary} />
         </Pressable>
         <View style={styles.brandWordmarkFrame}>
           <Image
@@ -99,8 +96,13 @@ export default function HomeScreen() {
             accessibilityLabel={"d\u00fcply"}
           />
         </View>
-        <Pressable onPress={() => router.push('/categories')} style={styles.menuBtn}>
-          <Menu width={24} height={24} stroke={colors.primary} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+          onPress={() => router.push('/profile')}
+          style={styles.menuBtn}
+        >
+          <User width={22} height={22} stroke={colors.primary} />
         </Pressable>
       </View>
 
@@ -157,11 +159,7 @@ export default function HomeScreen() {
                 <View style={styles.suggestionsPanel}>
                   {searchLoading ? (
                     <View style={styles.suggestionsLoading}>
-                      <SearchFlowLoader
-                        compact
-                        title="Following the search through the model"
-                        subtitle="Resolving the item, matching it, and checking live shopping pages."
-                      />
+                      <Text style={styles.suggestionsSubtitle}>Searching...</Text>
                     </View>
                   ) : searchError ? (
                     <View style={styles.suggestionsState}>
@@ -289,25 +287,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
     borderWidth: 2,
     borderColor: colors.primary,
-  },
-  brandLogoFrame: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.cream,
-    backgroundColor: colors.cream,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandLogoImage: {
-    width: 40,
-    height: 40,
-  },
-  brandLogoPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.96 }],
   },
   brandWordmarkFrame: {
     flex: 1,

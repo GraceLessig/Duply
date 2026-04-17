@@ -2,6 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Category, CategoryProductsPage, Dupe, Product } from '../services/api';
 import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
 
+const SEARCH_FALLBACK_SUFFIXES = ['foundation', 'blush', 'lipstick', 'concealer'];
+
+function isLikelyBrandQuery(query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.split(/\s+/).length > 4) return false;
+  if (/\d/.test(normalized)) return false;
+  return /^[a-z.'\-\s]+$/.test(normalized);
+}
+
+function dedupeProducts(products: Product[]) {
+  const seen = new Set<string>();
+  return products.filter(product => {
+    const key = `${product.id}:${product.brand.toLowerCase()}:${product.name.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 interface AsyncState<T> {
   data: T | null;
   loading: boolean;
@@ -100,8 +120,26 @@ export function useSearch() {
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const data = await dataService.searchProducts(trimmedQuery);
+        let data = await dataService.searchProducts(trimmedQuery);
+
         if (requestId !== requestIdRef.current) return;
+
+        if (data.length === 0 && isLikelyBrandQuery(trimmedQuery)) {
+          const fallbackResults: Product[] = [];
+
+          for (const suffix of SEARCH_FALLBACK_SUFFIXES) {
+            const fallbackQuery = `${trimmedQuery} ${suffix}`;
+            const fallbackData = await dataService.searchProducts(fallbackQuery);
+            if (requestId !== requestIdRef.current) return;
+            fallbackResults.push(...fallbackData);
+            if (fallbackResults.length >= 8) {
+              break;
+            }
+          }
+
+          data = dedupeProducts(fallbackResults).slice(0, 8);
+        }
+
         data.slice(0, 4).forEach(seedProductCache);
         prefetchProductsById(data.slice(0, 4).map(product => product.id));
         cacheRef.current.set(normalizedQuery, data);
