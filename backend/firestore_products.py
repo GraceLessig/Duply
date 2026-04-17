@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import time
 import json
+import hashlib
 from typing import Iterable
 
 try:
@@ -104,6 +105,9 @@ _search_cache = {}
 METADATA_PATH = BASE_DIR / "cosmetics_metadata.json"
 _metadata_products = None
 _metadata_products_by_id = None
+_catalog_products = None
+_catalog_products_by_id = None
+_catalog_cache_loaded_at = 0.0
 
 
 PRODUCT_TYPE_ALIASES = {
@@ -171,6 +175,34 @@ CATEGORY_BUCKETS = {
 def normalize_product_type(value):
     normalized = normalize_text(value)
     return PRODUCT_TYPE_ALIASES.get(normalized, normalized)
+
+
+def _slugify(value):
+    normalized = normalize_text(value)
+    normalized = normalized.replace("&", " and ")
+    normalized = "".join(ch if ch.isalnum() else "-" for ch in normalized)
+    normalized = "-".join(part for part in normalized.split("-") if part)
+    return normalized or "item"
+
+
+def build_catalog_product_id(product):
+    brand = str(product.get("brand") or "").strip()
+    name = str(product.get("product_name") or product.get("name") or "").strip()
+    product_type = normalize_product_type(
+        product.get("subcategory") or product.get("type") or product.get("productType") or product.get("category")
+    )
+    digest = hashlib.sha1(
+        f"{normalize_text(brand)}|{normalize_text(name)}|{product_type}".encode("utf-8")
+    ).hexdigest()[:12]
+    return f"prod-{_slugify(brand)}-{_slugify(name)}-{digest}"
+
+
+def invalidate_catalog_cache():
+    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at
+    _catalog_products = None
+    _catalog_products_by_id = None
+    _catalog_cache_loaded_at = 0.0
+    _search_cache.clear()
 
 
 def _product_bucket(product):
@@ -500,7 +532,7 @@ def _metadata_match_score(product, target):
 
 
 def _fetch_metadata_product(target):
-    products = _load_metadata_products()
+    products = _load_catalog_products()
     if not products:
         return None
 
@@ -520,70 +552,26 @@ def _fetch_metadata_product(target):
 
 
 def fetch_firestore_product(target):
-    metadata_match = _fetch_metadata_product(target)
-    if metadata_match:
-        return metadata_match
-
-    candidates = []
-    seen_ids = set()
-
-    brand = target.get("brand")
-    product_name = target.get("product_name")
-
-    query_pairs = [
-        ("Product_Name", product_name),
-        ("product_name", product_name),
-        ("name", product_name),
-        ("title", product_name),
-        ("productName", product_name),
-    ]
-
-    for field, value in query_pairs:
-        for doc in _query_by_field(field, value):
-            if doc.id not in seen_ids:
-                seen_ids.add(doc.id)
-                candidates.append(doc)
-
-    if brand:
-        for field in ["Brand", "brand"]:
-            for doc in _query_by_field(field, brand):
-                if doc.id not in seen_ids:
-                    seen_ids.add(doc.id)
-                    candidates.append(doc)
-
-    if not candidates:
-        return None
-
-    best_doc = None
-    best_score = -1
-
-    for doc in candidates:
-        score = _score_firestore_match(doc.to_dict() or {}, target)
-        if score > best_score:
-            best_score = score
-            best_doc = doc
-
-    if not best_doc or best_score <= 0:
-        return None
-
-    return _normalize_firestore_product(best_doc)
+    return _fetch_metadata_product(target)
 
 
 def get_firestore_product_by_id(doc_id):
     if not doc_id:
         return None
 
-    metadata_product = _get_metadata_product_by_id(doc_id)
-    if metadata_product:
-        return metadata_product
+    catalog_product = _catalog_products_by_id_map().get(doc_id)
+    if catalog_product:
+        return catalog_product
 
     try:
-        doc = db.collection(PRODUCTS_COLLECTION).document(doc_id).get()
-        if not doc.exists:
-            return None
-        return _normalize_firestore_product(doc)
+        if db is not None:
+            doc = db.collection(PRODUCTS_COLLECTION).document(doc_id).get()
+            if doc.exists:
+                return _normalize_catalog_record(doc.to_dict() or {}, doc.id)
     except Exception:
-        return None
+        pass
+
+    return _get_metadata_product_by_id(doc_id)
 
 
 def search_firestore_products(query, limit=20):
@@ -597,7 +585,7 @@ def search_firestore_products(query, limit=20):
         return cached
 
     query_tokens = [token for token in normalized_query.split() if token]
-    products = _load_metadata_products()
+    products = _load_catalog_products()
     if not products:
         _search_cache_set(cache_key, [])
         return []
@@ -627,7 +615,7 @@ def _category_matches(category_or_type):
     if not normalized_target:
         return []
 
-    products = _load_metadata_products()
+    products = _load_catalog_products()
     matches = []
 
     for product in products:
@@ -697,3 +685,179 @@ def list_products_by_category(category_or_type, limit=24, page=1, query="", sort
         "pageSize": safe_limit,
         "totalPages": max(1, (total + safe_limit - 1) // safe_limit),
     }
+
+
+def _normalize_catalog_record(data, doc_id=""):
+    data = data or {}
+    category = data.get("Category") or data.get("category") or data.get("main_category") or ""
+    product_type = normalize_product_type(
+        data.get("subcategory") or data.get("productType") or data.get("type") or category
+    )
+
+    return {
+        "firestore_id": doc_id or data.get("id") or build_catalog_product_id(data),
+        "brand": data.get("Brand") or data.get("brand") or "",
+        "product_name": (
+            data.get("Product_Name")
+            or data.get("product_name")
+            or data.get("name")
+            or data.get("title")
+            or data.get("productName")
+            or ""
+        ),
+        "category": category,
+        "subcategory": product_type,
+        "type": product_type,
+        "price": data.get("Price_USD") or data.get("price") or data.get("salePrice") or data.get("current_price") or 0,
+        "rating": data.get("Rating") or data.get("rating") or data.get("avgRating") or 0,
+        "image": data.get("image") or data.get("imageUrl") or data.get("image_link") or "",
+        "raw": data,
+    }
+
+
+def _product_identity_key(product):
+    return (
+        normalize_text(product.get("brand")),
+        normalize_text(product.get("product_name")),
+        normalize_product_type(product.get("subcategory") or product.get("type") or product.get("category")),
+    )
+
+
+def _load_catalog_products(force_refresh=False):
+    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at
+
+    if (
+        not force_refresh
+        and _catalog_products is not None
+        and (time.time() - _catalog_cache_loaded_at) <= CACHE_TTL_SECONDS
+    ):
+        return _catalog_products
+
+    merged = []
+    by_id = {}
+    seen_identity = set()
+
+    if db is not None:
+        try:
+            docs = list(db.collection(PRODUCTS_COLLECTION).stream())
+        except Exception:
+            docs = []
+
+        for doc in docs:
+            normalized = _normalize_catalog_record(doc.to_dict() or {}, doc.id)
+            if not normalized.get("brand") or not normalized.get("product_name"):
+                continue
+            identity = _product_identity_key(normalized)
+            if identity in seen_identity:
+                continue
+            seen_identity.add(identity)
+            merged.append(normalized)
+            by_id[normalized["firestore_id"]] = normalized
+
+    for product in _load_metadata_products():
+        identity = _product_identity_key(product)
+        if identity in seen_identity:
+            continue
+        seen_identity.add(identity)
+        merged.append(product)
+        by_id[product["firestore_id"]] = product
+
+    _catalog_products = merged
+    _catalog_products_by_id = by_id
+    _catalog_cache_loaded_at = time.time()
+    return _catalog_products
+
+
+def _catalog_products_by_id_map():
+    _load_catalog_products()
+    return _catalog_products_by_id or {}
+
+
+def _normalize_upsert_product(product):
+    source = product.get("source") or product.get("sourceProvider") or "catalog"
+    brand = str(product.get("brand") or "").strip()
+    name = str(product.get("product_name") or product.get("name") or "").strip()
+    category = str(product.get("category") or "").strip()
+    product_type = normalize_product_type(
+        product.get("subcategory") or product.get("type") or product.get("productType") or category
+    )
+    price = _safe_float(product.get("price"))
+    rating = _safe_float(product.get("rating"))
+    image = str(product.get("image") or product.get("image_link") or product.get("imageUrl") or "").strip()
+    product_url = (
+        product.get("productUrl")
+        or product.get("title-href")
+        or product.get("raw", {}).get("productUrl")
+        or ""
+    )
+    merchant_offers = product.get("merchantOffers") or product.get("raw", {}).get("merchantOffers") or []
+    merchant_domain = str(product.get("merchantDomain") or product.get("raw", {}).get("merchantDomain") or "").strip()
+    if not merchant_domain and product_url:
+        merchant_domain = normalize_text(product_url.split("/")[2] if "://" in product_url else "")
+
+    payload = {
+        "id": product.get("firestore_id") or product.get("id") or build_catalog_product_id(product),
+        "Brand": brand,
+        "brand": brand,
+        "Product_Name": name,
+        "product_name": name,
+        "name": name,
+        "title": name,
+        "Category": category,
+        "category": category,
+        "subcategory": product_type,
+        "productType": product_type,
+        "type": product_type,
+        "Price_USD": price,
+        "price": price,
+        "salePrice": price,
+        "current_price": price,
+        "Rating": rating,
+        "rating": rating,
+        "avgRating": rating,
+        "image": image,
+        "imageUrl": image,
+        "image_link": image,
+        "productUrl": product_url,
+        "merchantDomain": merchant_domain,
+        "merchantOffers": merchant_offers,
+        "sourceProvider": source,
+        "source": source,
+        "searchText": " ".join(part for part in [brand, name, category, product_type] if part).strip(),
+        "availabilityStatus": product.get("availabilityStatus") or "active",
+        "lastSeenAt": product.get("lastSeenAt") or int(time.time()),
+        "lastValidatedAt": product.get("lastValidatedAt") or int(time.time()),
+        "releaseYear": product.get("releaseYear") or product.get("raw", {}).get("releaseYear"),
+        "raw": product.get("raw") or {},
+    }
+    return payload
+
+
+def upsert_firestore_products(products):
+    if db is None:
+        return {"written": 0, "skipped": len(products or []), "available": False}
+
+    normalized_products = []
+    for product in products or []:
+        payload = _normalize_upsert_product(product)
+        if not payload.get("brand") or not payload.get("product_name"):
+            continue
+        normalized_products.append(payload)
+
+    if not normalized_products:
+        return {"written": 0, "skipped": 0, "available": True}
+
+    batch = db.batch()
+    written = 0
+    for index, payload in enumerate(normalized_products, start=1):
+        doc_id = payload["id"]
+        doc_ref = db.collection(PRODUCTS_COLLECTION).document(doc_id)
+        batch.set(doc_ref, payload, merge=True)
+        if index % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+        written += 1
+
+    batch.commit()
+    invalidate_catalog_cache()
+    return {"written": written, "skipped": 0, "available": True}

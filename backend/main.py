@@ -1,7 +1,6 @@
 from pathlib import Path
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -19,11 +18,9 @@ from firestore_products import (
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
 from web_products import (
-    discover_live_category_products,
+    augment_firestore_catalog_with_top_brands,
     find_price_matches,
     find_product_image,
-    find_live_dupe_candidates,
-    get_web_product_by_id,
     is_approved_retailer_url,
     is_live_product_url,
     search_web_products,
@@ -563,29 +560,9 @@ def _product_sort_key(product, sort_by: str):
 
 def _search_products_once(q: str, local_limit: int, web_limit: int, max_results: int = 120):
     local_results = search_firestore_products(q, limit=local_limit)
-    web_results = search_web_products(q, limit=web_limit)
 
     seen = set()
     combined = []
-
-    # Web results are already validated against live shopping pages.
-    for product in web_results:
-        key = (
-            _normalize_text(product.get("brand")),
-            _normalize_text(product.get("product_name")),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        normalized_product = _finalize_product(
-            _product_from_record(product, fallback={"id": product.get("firestore_id", "")}),
-            require_image=False,
-        )
-        if not normalized_product:
-            continue
-        combined.append(normalized_product)
-        if len(combined) >= max_results:
-            return _dedupe_products(combined, require_image=False)[:max_results]
 
     # Search should still surface valid live products even if our local metadata
     # is missing an image, so we allow image-less products in this path.
@@ -611,7 +588,7 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
 
 
 def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max_results: int = 120):
-    combined = _search_products_once(q, local_limit=local_limit, web_limit=web_limit, max_results=max_results)
+    combined = _search_products_once(q, local_limit=local_limit, web_limit=0, max_results=max_results)
     if combined or not _is_likely_brand_query(q):
         return combined
 
@@ -622,7 +599,7 @@ def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max
             _search_products_once(
                 fallback_query,
                 local_limit=max(12, local_limit // 2),
-                web_limit=max(10, web_limit // 2),
+                web_limit=0,
                 max_results=max_results,
             )
         )
@@ -637,6 +614,28 @@ def health():
     return {"ok": True, **get_recommendation_status()}
 
 
+@app.post("/admin/augment-top-brands")
+async def augment_top_brands(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    brands = body.get("brands") or None
+    categories = body.get("categories") or None
+    per_query_limit = max(1, min(int(body.get("perQueryLimit") or 12), 50))
+
+    try:
+        result = augment_firestore_catalog_with_top_brands(
+            brands=brands,
+            categories=categories,
+            per_query_limit=per_query_limit,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/products/search")
 def search_products(q: str, limit: int = 8):
     normalized_query = _normalize_text(q)
@@ -649,7 +648,7 @@ def search_products(q: str, limit: int = 8):
     combined = _search_products_with_fallback(
         q,
         local_limit=max(24, normalized_limit * 3),
-        web_limit=max(12, normalized_limit * 2),
+        web_limit=0,
         max_results=max(32, normalized_limit * 4),
     )
     return _cache_set(cache_key, combined[:normalized_limit])
@@ -670,7 +669,7 @@ def search_products_page(q: str, page: int = 1, page_size: int = 24, sort: str =
     combined = _search_products_with_fallback(
         q,
         local_limit=target_count,
-        web_limit=min(max(normalized_page * normalized_page_size * 2, 24), 96),
+        web_limit=0,
         max_results=target_count,
     )
     combined.sort(key=lambda product: _product_sort_key(product, normalized_sort))
@@ -704,35 +703,16 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
         query=q,
         sort_by=sort,
     )
-    live_results = discover_live_category_products(category_or_type, limit=max(page_size, 24)) if page == 1 and not q.strip() else []
     available_items = []
     for index, product in enumerate(result["items"]):
-        normalized_product = _coerce_to_live_product(
+        normalized_product = _coerce_to_display_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=index < 8,
         )
-        if not _is_product_available(normalized_product):
+        if not normalized_product:
             continue
         available_items.append(normalized_product)
-
-    for product in live_results:
-        normalized_product = _coerce_to_live_product(
-            product,
-            fallback={"id": product.get("firestore_id", "")},
-            enrich_image=False,
-        )
-        if not _is_product_available(normalized_product):
-            continue
-        if any(
-            _normalize_text(existing.get("brand")) == _normalize_text(normalized_product.get("brand"))
-            and _normalize_text(existing.get("name")) == _normalize_text(normalized_product.get("name"))
-            for existing in available_items
-        ):
-            continue
-        available_items.append(normalized_product)
-        if len(available_items) >= page_size:
-            break
 
     available_items = _dedupe_products(available_items)
 
@@ -768,12 +748,12 @@ def _legacy_category_products(category_or_type: str):
     result = list_products_by_category(category_or_type, limit=24, page=1)
     available_items = []
     for index, product in enumerate(result["items"]):
-        normalized_product = _coerce_to_live_product(
+        normalized_product = _coerce_to_display_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=index < 8,
         )
-        if not _is_product_available(normalized_product):
+        if not normalized_product:
             continue
         available_items.append(normalized_product)
     return _dedupe_products(available_items)
@@ -783,16 +763,40 @@ def _legacy_category_products(category_or_type: str):
 async def get_price_matches(request: Request):
     try:
         body = await request.json()
+        product_id = body.get("id", "")
         brand = body.get("brand", "")
         name = body.get("name", "")
 
         if not name:
             raise HTTPException(status_code=400, detail="Product name is required")
 
-        cache_key = ("price_matches", _normalize_text(brand), _normalize_text(name))
+        cache_key = ("price_matches", product_id, _normalize_text(brand), _normalize_text(name))
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
+
+        if product_id:
+            product = get_firestore_product_by_id(product_id)
+            merchant_offers = ((product or {}).get("raw") or {}).get("merchantOffers") or []
+            normalized_offers = []
+            for index, offer in enumerate(merchant_offers[:3]):
+                url = offer.get("url") or ""
+                price = _normalize_price(offer.get("price"))
+                if not url or price <= 0:
+                    continue
+                normalized_offers.append({
+                    "id": offer.get("id") or f"stored-offer-{index}",
+                    "retailer": offer.get("retailer") or "",
+                    "title": offer.get("title") or f"{brand} {name}".strip(),
+                    "price": price,
+                    "url": url,
+                    "image": offer.get("image") or "",
+                    "shipping": offer.get("shipping") or "",
+                    "source": offer.get("source") or "catalog",
+                    "matchConfidence": offer.get("matchConfidence") or 100,
+                })
+            if normalized_offers:
+                return _cache_set(cache_key, normalized_offers[:3])
 
         return _cache_set(cache_key, find_price_matches(brand, name, limit=3))
     except HTTPException:
@@ -808,19 +812,6 @@ def get_product(product_id: str):
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
-
-    if product_id.startswith("web-"):
-        product = get_web_product_by_id(product_id)
-        if not product:
-            raise HTTPException(status_code=404, detail="Web product expired from cache")
-        normalized_product = _coerce_to_display_product(
-            product,
-            fallback={"id": product.get("firestore_id", "")},
-            enrich_image=True,
-        )
-        if not normalized_product:
-            raise HTTPException(status_code=404, detail="Product not found")
-        return _cache_set(cache_key, normalized_product)
 
     product = get_firestore_product_by_id(product_id)
     if not product:
@@ -858,18 +849,7 @@ async def get_dupes(request: Request):
         # Let backend metadata be the source of truth
         matched_product = lookup_product(query, preferred_type=product_type)
         model_results = find_dupes(query, preferred_type=product_type)
-        live_results = [
-            {"record": candidate, "score": 0.0}
-            for candidate in find_live_dupe_candidates(
-                brand=brand,
-                product_name=name,
-                product_type=product_type,
-                category=category,
-                price=price,
-                limit=20,
-            )
-        ]
-        results = _merge_ranked_candidates(model_results, live_results)
+        results = _merge_ranked_candidates(model_results)
         original_firestore = fetch_firestore_product({
             "brand": brand,
             "product_name": name,
