@@ -358,9 +358,23 @@ def _fetch_product_info(candidate):
 
 
 def _extract_offers(product_info, fallback_title=""):
-    sellers = (product_info or {}).get("sellers") or (product_info or {}).get("items") or []
+    def walk_items(node):
+        if isinstance(node, dict):
+            yield node
+            nested = node.get("items")
+            if isinstance(nested, list):
+                for child in nested:
+                    yield from walk_items(child)
+            sellers = node.get("sellers")
+            if isinstance(sellers, list):
+                for seller in sellers:
+                    yield seller
+        elif isinstance(node, list):
+            for child in node:
+                yield from walk_items(child)
+
     offers = []
-    for seller in sellers:
+    for seller in walk_items(product_info or {}):
         url = str(_extract(seller, "url", "shop_ad_aclk", "link") or "").strip()
         price_obj = seller.get("price") or {}
         price = _extract_price(_extract(seller, "price") if not isinstance(price_obj, dict) else _extract(price_obj, "current", "current_price", "value"))
@@ -378,9 +392,28 @@ def _extract_offers(product_info, fallback_title=""):
     return offers
 
 
+def _extract_product_info_title(product_info, fallback_title=""):
+    def walk_items(node):
+        if isinstance(node, dict):
+            yield node
+            nested = node.get("items")
+            if isinstance(nested, list):
+                for child in nested:
+                    yield from walk_items(child)
+        elif isinstance(node, list):
+            for child in node:
+                yield from walk_items(child)
+
+    for item in walk_items(product_info or {}):
+        title = str(_extract(item, "title", "name") or "").strip()
+        if title:
+            return title
+    return fallback_title
+
+
 def _normalize_candidate(candidate, product_info=None):
     product_info = product_info or {}
-    title = str((product_info or {}).get("title") or candidate.get("title") or "").strip()
+    title = _extract_product_info_title(product_info, str(candidate.get("title") or "").strip())
     offers = _extract_offers(product_info, title)
     best_offer = offers[0] if offers else None
     product_url = (best_offer or {}).get("url") or candidate.get("shopping_url") or ""
@@ -491,7 +524,15 @@ def _search_brand_catalog(brand, category_or_type="", limit=12, enrich_product_i
             product = _normalize_candidate(candidate, _fetch_product_info(candidate) if enrich_product_info else {})
             if not product:
                 continue
-            if category_or_type and normalize_product_type(product.get("type")) != normalize_product_type(category_or_type):
+            # Validity requirement is brand + live purchasability, not exact category parsing.
+            # We still query by category terms, but we don't discard products for title-based
+            # misclassification after the provider returns them.
+            live_offer_urls = [
+                offer.get("url")
+                for offer in product.get("merchantOffers") or []
+                if offer.get("url")
+            ]
+            if not live_offer_urls and not product.get("title-href"):
                 continue
             dedupe_key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
             if dedupe_key in seen:
