@@ -11,6 +11,7 @@ import type { Product } from '../services/api';
 import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
+const DEFAULT_PAGE_SIZE = 18;
 
 type SortOption = 'az' | 'priceLow' | 'priceHigh' | 'popular';
 
@@ -21,8 +22,6 @@ const sortOptions: { id: SortOption; label: string }[] = [
   { id: 'popular', label: 'Popular' },
 ];
 
-const pageSizeOptions = [12, 24, 48, 96];
-
 export default function CategoryProductsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; title?: string }>();
@@ -31,7 +30,7 @@ export default function CategoryProductsScreen() {
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('popular');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(24);
+  const pageSize = DEFAULT_PAGE_SIZE;
   const { data, loading, error } = useProductsByCategory(category, { page, pageSize, query, sort: sortBy });
   const products = data?.items || EMPTY_PRODUCTS;
   const totalProducts = data?.total || 0;
@@ -41,7 +40,7 @@ export default function CategoryProductsScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [category, query, sortBy, pageSize]);
+  }, [category, query, sortBy]);
 
   useEffect(() => {
     if (data?.totalPages && page > data.totalPages) {
@@ -145,28 +144,6 @@ export default function CategoryProductsScreen() {
             );
           })}
         </ScrollView>
-      </View>
-
-      <View style={styles.pageSizeBlock}>
-        <Text style={styles.pageSizeLabel}>Results per page</Text>
-        <View style={styles.pageSizeOptions}>
-          {pageSizeOptions.map(size => {
-            const active = pageSize === size;
-            return (
-              <Pressable
-                key={size}
-                onPress={() => setPageSize(size)}
-                style={({ pressed }) => [
-                  styles.pageSizeChip,
-                  active && styles.pageSizeChipActive,
-                  pressed && styles.sortChipPressed,
-                ]}
-              >
-                <Text style={[styles.pageSizeChipText, active && styles.pageSizeChipTextActive]}>{size}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
       </View>
 
       {isInitialLoading ? (
@@ -346,41 +323,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   sortChipTextActive: {
-    color: colors.textOnPrimary,
-  },
-  pageSizeBlock: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  pageSizeLabel: {
-    ...typography.smallBold,
-    color: colors.primary,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
-  },
-  pageSizeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  pageSizeChip: {
-    minWidth: 52,
-    alignItems: 'center',
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  pageSizeChipActive: {
-    backgroundColor: colors.primary,
-  },
-  pageSizeChipText: {
-    ...typography.captionBold,
-    color: colors.primary,
-  },
-  pageSizeChipTextActive: {
     color: colors.textOnPrimary,
   },
   loadingWrap: {

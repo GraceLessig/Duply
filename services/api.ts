@@ -80,4 +80,4 @@ export interface DataService {
 // The app uses the local backend service, which handles product catalog lookups
 // and model-powered dupe lookup behind a single data service interface.
 export { makeupApiService as dataService } from './makeupApi';
-export { prefetchProductById, prefetchProductsById, seedProductCache } from './backendApi';
+export { prefetchCategoryPage, prefetchProductById, prefetchProductsById, seedProductCache } from './backendApi';

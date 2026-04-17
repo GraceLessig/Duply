@@ -144,6 +144,7 @@ _metadata_products_by_id = None
 _catalog_products = None
 _catalog_products_by_id = None
 _catalog_cache_loaded_at = 0.0
+_category_counts_cache = None
 
 
 PRODUCT_TYPE_ALIASES = {
@@ -251,10 +252,11 @@ def build_web_cache_id(cache_kind, cache_key):
 
 
 def invalidate_catalog_cache():
-    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at
+    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at, _category_counts_cache
     _catalog_products = None
     _catalog_products_by_id = None
     _catalog_cache_loaded_at = 0.0
+    _category_counts_cache = None
     _search_cache.clear()
 
 
@@ -769,11 +771,35 @@ def count_products_by_category(category_or_type):
     return len(_category_matches(category_or_type))
 
 
+def _rounded_category_estimate(count):
+    safe_count = max(0, int(count or 0))
+    if safe_count <= 0:
+        return 0
+    if safe_count < 100:
+        step = 25
+    elif safe_count < 500:
+        step = 50
+    elif safe_count < 2000:
+        step = 100
+    else:
+        step = 250
+    return max(step, (safe_count // step) * step)
+
+
 def category_counts():
+    global _category_counts_cache
+    if _category_counts_cache is not None:
+        return _category_counts_cache
+
     counts = {category: 0 for category in [*CATEGORY_BUCKETS.keys(), "other"]}
     for product in _load_catalog_products():
         counts[_product_bucket(product)] = counts.get(_product_bucket(product), 0) + 1
-    return counts
+
+    _category_counts_cache = {
+        category: _rounded_category_estimate(count)
+        for category, count in counts.items()
+    }
+    return _category_counts_cache
 
 
 def list_products_by_category(category_or_type, limit=24, page=1, query="", sort_by="popular"):

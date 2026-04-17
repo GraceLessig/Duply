@@ -95,6 +95,16 @@ export function prefetchProductsById(ids: string[]) {
     });
 }
 
+export function prefetchCategoryPage(
+  category: string,
+  options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
+) {
+  if (!category) return;
+  void getProductsByCategoryFromBackend(category, options).catch(() => {
+    // Best-effort cache warming only.
+  });
+}
+
 async function fetchJsonWithCache<T>(url: string, options: RequestInit | undefined, cacheKey: string, ttlMs: number): Promise<T> {
   const cached = getCachedValue<T>(cacheKey);
   if (cached !== null) {

@@ -11,6 +11,7 @@ import type { Product } from '../services/api';
 import { dataService, prefetchProductsById } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
+const DEFAULT_PAGE_SIZE = 18;
 
 type SortOption = 'az' | 'priceLow' | 'priceHigh' | 'popular';
 type ViewMode = 'list' | 'grid';
@@ -22,8 +23,6 @@ const sortOptions: { id: SortOption; label: string }[] = [
   { id: 'priceHigh', label: '$ High' },
 ];
 
-const pageSizeOptions = [12, 24, 48, 96];
-
 export default function SearchCatalogScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ q?: string }>();
@@ -33,7 +32,7 @@ export default function SearchCatalogScreen() {
   const [sortBy, setSortBy] = useState<SortOption>('popular');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(24);
+  const pageSize = DEFAULT_PAGE_SIZE;
   const { data, loading, error } = useProductSearchResults(submittedQuery, { page, pageSize, sort: sortBy });
   const products = data?.items || EMPTY_PRODUCTS;
   const totalProducts = data?.total || 0;
@@ -48,7 +47,7 @@ export default function SearchCatalogScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [submittedQuery, sortBy, pageSize]);
+  }, [submittedQuery, sortBy]);
 
   useEffect(() => {
     if (data?.totalPages && page > data.totalPages) {
@@ -152,30 +151,8 @@ export default function SearchCatalogScreen() {
         </ScrollView>
       </View>
 
-      <View style={styles.pageSizeBlock}>
-        <Text style={styles.pageSizeLabel}>Results per page</Text>
-        <View style={styles.pageSizeOptions}>
-          {pageSizeOptions.map(size => {
-            const active = pageSize === size;
-            return (
-              <Pressable
-                key={size}
-                onPress={() => setPageSize(size)}
-                style={({ pressed }) => [
-                  styles.pageSizeChip,
-                  active && styles.pageSizeChipActive,
-                  pressed && styles.sortChipPressed,
-                ]}
-              >
-                <Text style={[styles.pageSizeChipText, active && styles.pageSizeChipTextActive]}>{size}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
       <View style={styles.viewModeBlock}>
-        <Text style={styles.pageSizeLabel}>View</Text>
+        <Text style={styles.viewModeLabel}>View</Text>
         <View style={styles.viewModeOptions}>
           {(['list', 'grid'] as ViewMode[]).map(mode => {
             const active = viewMode === mode;
@@ -381,24 +358,15 @@ const styles = StyleSheet.create({
   sortChipTextActive: {
     color: colors.textOnPrimary,
   },
-  pageSizeBlock: {
+  viewModeBlock: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
-  pageSizeLabel: {
+  viewModeLabel: {
     ...typography.smallBold,
     color: colors.primary,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
-  },
-  pageSizeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  viewModeBlock: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
   },
   viewModeOptions: {
     flexDirection: 'row',
@@ -422,26 +390,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   viewModeChipTextActive: {
-    color: colors.textOnPrimary,
-  },
-  pageSizeChip: {
-    minWidth: 52,
-    alignItems: 'center',
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  pageSizeChipActive: {
-    backgroundColor: colors.primary,
-  },
-  pageSizeChipText: {
-    ...typography.captionBold,
-    color: colors.primary,
-  },
-  pageSizeChipTextActive: {
     color: colors.textOnPrimary,
   },
   loadingWrap: {
