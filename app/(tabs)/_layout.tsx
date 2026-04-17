@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Heart, Home, User } from 'react-native-feather';
+import { Heart, Home, Menu, User } from 'react-native-feather';
 import { colors, radius, spacing } from '../../constants/theme';
 
 export default function TabLayout() {
@@ -26,6 +26,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
               <Home width={22} height={22} stroke={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="categories"
+        options={{
+          title: 'Categories',
+          tabBarAccessibilityLabel: 'Categories',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
+              <Menu width={22} height={22} stroke={color} />
             </View>
           ),
         }}

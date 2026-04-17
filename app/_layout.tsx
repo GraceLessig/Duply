@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import GlobalProfileShortcut from '../components/GlobalProfileShortcut';
 import AppInstallPrompt from '../components/AppInstallPrompt';
 import { ActivityProvider } from '../contexts/ActivityContext';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -19,10 +20,6 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="categories"
-                options={{ animation: 'slide_from_bottom' }}
-              />
               <Stack.Screen name="search" />
               <Stack.Screen name="searchResults" />
               <Stack.Screen name="productDetails" />
@@ -32,6 +29,7 @@ export default function RootLayout() {
               <Stack.Screen name="terms" />
               <Stack.Screen name="privacy" />
             </Stack>
+            <GlobalProfileShortcut />
             <AppInstallPrompt />
           </FavoritesProvider>
         </ActivityProvider>

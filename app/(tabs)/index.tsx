@@ -10,7 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { Menu, Search, TrendingUp, User } from 'react-native-feather';
+import { Search, TrendingUp, User } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProductCard from '../../components/ProductCard';
 import { ProductCardSkeleton } from '../../components/SkeletonLoader';
@@ -82,11 +82,13 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Browse categories"
-          onPress={() => router.push('/categories')}
-          style={styles.menuBtn}
+          accessibilityLabel="Learn more about duply"
+          onPress={() => router.push('/about')}
+          style={({ pressed }) => pressed && styles.brandLogoPressed}
         >
-          <Menu width={24} height={24} stroke={colors.primary} />
+          <View style={styles.brandLogoFrame}>
+            <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogoImage} contentFit="contain" />
+          </View>
         </Pressable>
         <View style={styles.brandWordmarkFrame}>
           <Image
@@ -287,6 +289,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
     borderWidth: 2,
     borderColor: colors.primary,
+  },
+  brandLogoFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.cream,
+    backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandLogoImage: {
+    width: 40,
+    height: 40,
+  },
+  brandLogoPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
   },
   brandWordmarkFrame: {
     flex: 1,

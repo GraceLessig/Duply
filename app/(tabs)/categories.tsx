@@ -2,11 +2,10 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Skeleton } from '../components/SkeletonLoader';
-import { colors, radius, shadows, spacing, typography } from '../constants/theme';
-import { useCategories } from '../hooks/useProducts';
+import { Skeleton } from '../../components/SkeletonLoader';
+import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
+import { useCategories } from '../../hooks/useProducts';
 
 export default function CategoriesScreen() {
   const router = useRouter();
@@ -15,11 +14,7 @@ export default function CategoriesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft width={24} height={24} stroke={colors.primary} />
-        </Pressable>
         <Text style={styles.title}>Categories</Text>
-        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.content}>
@@ -63,18 +58,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   topBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.pink,
     borderBottomWidth: 1,
     borderBottomColor: colors.primary,
-  },
-  backBtn: {
-    padding: spacing.sm,
-    borderRadius: radius.md,
   },
   title: {
     ...typography.h2,
