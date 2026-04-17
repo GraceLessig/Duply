@@ -770,7 +770,10 @@ def count_products_by_category(category_or_type):
 
 
 def category_counts():
-    return {category: count_products_by_category(category) for category in [*CATEGORY_BUCKETS.keys(), "other"]}
+    counts = {category: 0 for category in [*CATEGORY_BUCKETS.keys(), "other"]}
+    for product in _load_catalog_products():
+        counts[_product_bucket(product)] = counts.get(_product_bucket(product), 0) + 1
+    return counts
 
 
 def list_products_by_category(category_or_type, limit=24, page=1, query="", sort_by="popular"):

@@ -7,9 +7,18 @@ import { Skeleton } from '../../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 import { useCategories } from '../../hooks/useProducts';
 
+const FALLBACK_CATEGORIES = [
+  { id: 'eyes', name: 'Eyes', emoji: '', productType: 'eyes', color: '#FFF9F0' },
+  { id: 'lips', name: 'Lips', emoji: '', productType: 'lips', color: '#FFE4F0' },
+  { id: 'face', name: 'Face', emoji: '', productType: 'face', color: '#F7C6D9' },
+  { id: 'skincare', name: 'Skincare', emoji: '', productType: 'skincare', color: '#FFF6F9' },
+  { id: 'other', name: 'Other', emoji: '', productType: 'other', color: '#2A0B26' },
+];
+
 export default function CategoriesScreen() {
   const router = useRouter();
   const { data: categories, loading } = useCategories();
+  const visibleCategories = categories && categories.length > 0 ? categories : FALLBACK_CATEGORIES;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -19,33 +28,31 @@ export default function CategoriesScreen() {
 
       <View style={styles.content}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {loading ? (
-            [1, 2, 3, 4].map(i => (
-              <Skeleton key={i} width="100%" height={120} borderRadius={radius.lg} style={{ marginBottom: spacing.lg }} />
-            ))
-          ) : (
-            (categories || []).map((cat, i) => (
-              <Animated.View key={cat.id} entering={FadeInDown.delay(i * 100).duration(400)}>
-                <Pressable
-                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/categoryProducts',
-                      params: { category: cat.productType, title: cat.name },
-                    })
-                  }
-                >
-                  <View style={[styles.cardGradient, { backgroundColor: cat.color }]}>
-                    <Text style={[styles.cardText, cat.id === 'other' && styles.cardTextDark]}>{cat.name}</Text>
+          {visibleCategories.map((cat, i) => (
+            <Animated.View key={cat.id} entering={FadeInDown.delay(i * 100).duration(400)}>
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/categoryProducts',
+                    params: { category: cat.productType, title: cat.name },
+                  })
+                }
+              >
+                <View style={[styles.cardGradient, { backgroundColor: cat.color }]}>
+                  <Text style={[styles.cardText, cat.id === 'other' && styles.cardTextDark]}>{cat.name}</Text>
+                  {loading && (!categories || categories.length === 0) ? (
+                    <Skeleton width={112} height={16} borderRadius={radius.full} style={styles.countSkeleton} />
+                  ) : (
                     <Text style={[styles.cardCount, cat.id === 'other' && styles.cardCountDark]}>
                       {cat.count ?? 0} products
                     </Text>
-                    <Text style={[styles.cardStar, cat.id === 'other' && styles.cardStarDark]}>*</Text>
-                  </View>
-                </Pressable>
-              </Animated.View>
-            ))
-          )}
+                  )}
+                  <Text style={[styles.cardStar, cat.id === 'other' && styles.cardStarDark]}>*</Text>
+                </View>
+              </Pressable>
+            </Animated.View>
+          ))}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -107,6 +114,10 @@ const styles = StyleSheet.create({
   cardCount: {
     ...typography.captionBold,
     color: colors.primary,
+    marginTop: spacing.xs,
+    zIndex: 1,
+  },
+  countSkeleton: {
     marginTop: spacing.xs,
     zIndex: 1,
   },

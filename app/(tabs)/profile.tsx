@@ -13,8 +13,9 @@ import { useProfile } from '../../hooks/useProfile';
 function DefaultAvatar() {
   return (
     <View style={styles.defaultAvatarArt}>
-      <View style={styles.defaultAvatarRing}>
-        <Image source={require('../../assets/images/duply-logo.png')} style={styles.defaultAvatarLogo} contentFit="contain" />
+      <View style={styles.defaultAvatarCircle}>
+        <View style={styles.defaultAvatarHead} />
+        <View style={styles.defaultAvatarBody} />
       </View>
     </View>
   );
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  defaultAvatarRing: {
+  defaultAvatarCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
@@ -352,10 +353,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.primary,
+    overflow: 'hidden',
   },
-  defaultAvatarLogo: {
-    width: 46,
-    height: 46,
+  defaultAvatarHead: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    marginTop: 6,
+  },
+  defaultAvatarBody: {
+    width: 30,
+    height: 18,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: colors.primary,
+    marginTop: 5,
   },
   photoButton: {
     flexDirection: 'row',
