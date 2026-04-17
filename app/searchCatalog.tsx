@@ -8,7 +8,7 @@ import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductSearchResults } from '../hooks/useProducts';
 import type { Product } from '../services/api';
-import { prefetchProductsById, seedProductCache } from '../services/api';
+import { prefetchProductsById } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
 
@@ -53,7 +53,6 @@ export default function SearchCatalogScreen() {
   }, [data?.totalPages, page]);
 
   useEffect(() => {
-    products.slice(0, 8).forEach(seedProductCache);
     prefetchProductsById(products.slice(0, 8).map(product => product.id));
   }, [products]);
 
@@ -64,10 +63,6 @@ export default function SearchCatalogScreen() {
   };
 
   const openProductForDupes = (id: string, name: string) => {
-    const selected = products.find(item => item.id === id);
-    if (selected) {
-      seedProductCache(selected);
-    }
     router.push({
       pathname: '/searchResults',
       params: { productId: id, productName: name },

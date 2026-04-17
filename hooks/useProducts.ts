@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Category, CategoryProductsPage, Dupe, Product } from '../services/api';
-import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
+import { dataService, prefetchProductsById } from '../services/api';
 
 interface AsyncState<T> {
   data: T | null;
@@ -124,7 +124,6 @@ export function useSearch() {
 
         if (requestId !== requestIdRef.current) return;
 
-        data.slice(0, 4).forEach(seedProductCache);
         prefetchProductsById(data.slice(0, 4).map(product => product.id));
         cacheRef.current.set(normalizedQuery, data);
         setResults(data);

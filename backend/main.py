@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -267,7 +268,7 @@ def _product_identity_key(product):
     )
 
 
-def _finalize_product(product):
+def _finalize_product(product, require_image=True):
     if not product:
         return None
 
@@ -302,18 +303,18 @@ def _finalize_product(product):
         return None
     if normalized["price"] <= 0:
         return None
-    if not normalized["image"]:
+    if require_image and not normalized["image"]:
         return None
 
     return normalized
 
 
-def _dedupe_products(products):
+def _dedupe_products(products, require_image=True):
     deduped = []
     seen = set()
 
     for product in products:
-        finalized = _finalize_product(product)
+        finalized = _finalize_product(product, require_image=require_image)
         if not finalized:
             continue
         key = _product_identity_key(finalized)
@@ -399,7 +400,8 @@ def _resolve_live_product(product):
 
         for candidate in search_web_products(query, limit=10):
             normalized_candidate = _finalize_product(
-                _product_from_record(candidate, fallback={"id": candidate.get("firestore_id", "")})
+                _product_from_record(candidate, fallback={"id": candidate.get("firestore_id", "")}),
+                require_image=False,
             )
             if not normalized_candidate or not _is_product_available(normalized_candidate):
                 continue
@@ -441,10 +443,35 @@ def _coerce_to_live_product(record, fallback=None, enrich_image=False):
     return _resolve_live_product(normalized_product)
 
 
-def _directly_available_product(record, fallback=None, enrich_image=False):
+def _search_ready_product(record, fallback=None, enrich_image=False):
+    fallback = fallback or {"id": record.get("firestore_id", "")}
+    return _finalize_product(
+        _product_from_record(record, fallback=fallback, enrich_image=enrich_image),
+        require_image=False,
+    )
+
+
+def _coerce_to_search_product(record, fallback=None, enrich_image=False):
+    fallback = fallback or {"id": record.get("firestore_id", "")}
+    normalized_product = _search_ready_product(record, fallback=fallback, enrich_image=enrich_image)
+    if not normalized_product:
+        return None
+
+    if _is_product_available(normalized_product):
+        return normalized_product
+
+    resolved_product = _resolve_live_product(normalized_product)
+    if not resolved_product:
+        return None
+
+    return _finalize_product(resolved_product, require_image=False)
+
+
+def _directly_available_product(record, fallback=None, enrich_image=False, require_image=True):
     fallback = fallback or {"id": record.get("firestore_id", "")}
     normalized_product = _finalize_product(
-        _product_from_record(record, fallback=fallback, enrich_image=enrich_image)
+        _product_from_record(record, fallback=fallback, enrich_image=enrich_image),
+        require_image=require_image,
     )
     if not normalized_product:
         return None
@@ -524,6 +551,7 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
 
     seen = set()
     combined = []
+    unresolved_local_results = []
 
     # Web results are already validated against live shopping pages.
     for product in web_results:
@@ -535,15 +563,17 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
             continue
         seen.add(key)
         normalized_product = _finalize_product(
-            _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+            _product_from_record(product, fallback={"id": product.get("firestore_id", "")}),
+            require_image=False,
         )
         if not normalized_product:
             continue
         combined.append(normalized_product)
         if len(combined) >= max_results:
-            return _dedupe_products(combined)[:max_results]
+            return _dedupe_products(combined, require_image=False)[:max_results]
 
-    # Keep search fast by only surfacing directly available local products here.
+    # Search should still surface valid live products even if our local metadata
+    # is missing an image, so we allow image-less products in this path.
     for product in local_results:
         key = (
             _normalize_text(product.get("brand")),
@@ -551,18 +581,48 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
         )
         if key in seen:
             continue
-        seen.add(key)
         normalized_product = _directly_available_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
+            require_image=False,
         )
-        if not normalized_product:
-            continue
-        combined.append(normalized_product)
+        if normalized_product:
+            seen.add(key)
+            combined.append(normalized_product)
+        else:
+            unresolved_local_results.append(product)
         if len(combined) >= max_results:
             break
 
-    return _dedupe_products(combined)[:max_results]
+    remaining_slots = max_results - len(combined)
+    if remaining_slots > 0 and unresolved_local_results:
+        shortlist_size = min(len(unresolved_local_results), max(8, min(remaining_slots * 2, 24)))
+        with ThreadPoolExecutor(max_workers=min(6, shortlist_size)) as executor:
+            futures = [
+                executor.submit(
+                    _coerce_to_search_product,
+                    product,
+                    {"id": product.get("firestore_id", "")},
+                    False,
+                )
+                for product in unresolved_local_results[:shortlist_size]
+            ]
+            for future in as_completed(futures):
+                try:
+                    normalized_product = future.result()
+                except Exception:
+                    continue
+                if not normalized_product:
+                    continue
+                identity = _product_identity_key(normalized_product)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                combined.append(normalized_product)
+                if len(combined) >= max_results:
+                    break
+
+    return _dedupe_products(combined, require_image=False)[:max_results]
 
 
 def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max_results: int = 120):
@@ -584,7 +644,7 @@ def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max
         if len(fallback_results) >= max_results:
             break
 
-    return _dedupe_products(fallback_results)[:max_results]
+    return _dedupe_products(fallback_results, require_image=False)[:max_results]
 
 
 @app.get("/health")
