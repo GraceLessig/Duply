@@ -1,5 +1,5 @@
 import type { Category, DataService, Dupe, Product, ProductColor } from './api';
-import { findDupesFromBackend, findPriceMatchesFromBackend, getCategoriesFromBackend, getProductByIdFromBackend, getProductsByCategoryFromBackend, searchProductsFromBackend } from './backendApi';
+import { findDupesFromBackend, findPriceMatchesFromBackend, getCategoriesFromBackend, getProductByIdFromBackend, getProductsByCategoryFromBackend, searchProductsFromBackend, searchProductsPageFromBackend } from './backendApi';
 
 const BASE_URL = 'https://makeup-api.herokuapp.com/api/v1/products.json';
 
@@ -83,8 +83,12 @@ async function fetchProducts(params: Record<string, string>): Promise<Product[]>
 }
 
 export const makeupApiService: DataService = {
-  async searchProducts(query: string): Promise<Product[]> {
-    return searchProductsFromBackend(query);
+  async searchProducts(query: string, options?: { limit?: number }): Promise<Product[]> {
+    return searchProductsFromBackend(query, options);
+  },
+
+  async searchProductsPage(query: string, options) {
+    return searchProductsPageFromBackend(query, options);
   },
 
   async getProductsByCategory(category: string, options) {

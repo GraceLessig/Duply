@@ -485,25 +485,47 @@ def _first_present(*values):
     return None
 
 
-@app.get("/health")
-def health():
-    return {"ok": True, **get_recommendation_status()}
+SEARCH_FALLBACK_SUFFIXES = ["foundation", "blush", "lipstick", "concealer"]
 
 
-@app.get("/products/search")
-def search_products(q: str):
-    cache_key = ("search", _normalize_text(q))
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+def _is_likely_brand_query(query: str) -> bool:
+    normalized = _normalize_text(query)
+    if not normalized:
+        return False
+    if len(normalized.split()) > 4:
+        return False
+    if any(char.isdigit() for char in normalized):
+        return False
+    return bool(re.fullmatch(r"[a-z.'\-\s]+", normalized))
 
-    local_results = search_firestore_products(q, limit=20)
-    web_results = search_web_products(q, limit=12)
+
+def _product_sort_key(product, sort_by: str):
+    name = _normalize_text(product.get("name"))
+    brand = _normalize_text(product.get("brand"))
+    price = _normalize_price(product.get("price"))
+    rating = _normalize_number(product.get("rating"), 0)
+    reviews = _normalize_number(product.get("numberOfReviews"), 0)
+    popularity = reviews + (rating * 100)
+
+    if sort_by == "priceLow":
+        return (price <= 0, price, name, brand)
+    if sort_by == "priceHigh":
+        return (price <= 0, -price, name, brand)
+    if sort_by == "az":
+        return (name, brand)
+    if sort_by == "popular":
+        return (-popularity, name, brand)
+    return (name, brand)
+
+
+def _search_products_once(q: str, local_limit: int, web_limit: int, max_results: int = 120):
+    local_results = search_firestore_products(q, limit=local_limit)
+    web_results = search_web_products(q, limit=web_limit)
 
     seen = set()
     combined = []
 
-    # Web search results are already filtered to live products, so prefer them for fast suggestions.
+    # Web results are already validated against live shopping pages.
     for product in web_results:
         key = (
             _normalize_text(product.get("brand")),
@@ -518,12 +540,11 @@ def search_products(q: str):
         if not normalized_product:
             continue
         combined.append(normalized_product)
-        if len(combined) >= 12:
-            return _cache_set(cache_key, _dedupe_products(combined)[:28])
+        if len(combined) >= max_results:
+            return _dedupe_products(combined)[:max_results]
 
-    # For local catalog matches, only keep directly available products here.
-    # Deep live-resolution is reserved for the selected-product flow to keep search responsive.
-    for product in local_results[:10]:
+    # Keep search fast by only surfacing directly available local products here.
+    for product in local_results:
         key = (
             _normalize_text(product.get("brand")),
             _normalize_text(product.get("product_name")),
@@ -538,10 +559,90 @@ def search_products(q: str):
         if not normalized_product:
             continue
         combined.append(normalized_product)
-        if len(combined) >= 12:
+        if len(combined) >= max_results:
             break
 
-    return _cache_set(cache_key, _dedupe_products(combined)[:28])
+    return _dedupe_products(combined)[:max_results]
+
+
+def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max_results: int = 120):
+    combined = _search_products_once(q, local_limit=local_limit, web_limit=web_limit, max_results=max_results)
+    if combined or not _is_likely_brand_query(q):
+        return combined
+
+    fallback_results = []
+    for suffix in SEARCH_FALLBACK_SUFFIXES:
+        fallback_query = f"{q} {suffix}".strip()
+        fallback_results.extend(
+            _search_products_once(
+                fallback_query,
+                local_limit=max(12, local_limit // 2),
+                web_limit=max(10, web_limit // 2),
+                max_results=max_results,
+            )
+        )
+        if len(fallback_results) >= max_results:
+            break
+
+    return _dedupe_products(fallback_results)[:max_results]
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, **get_recommendation_status()}
+
+
+@app.get("/products/search")
+def search_products(q: str, limit: int = 8):
+    normalized_query = _normalize_text(q)
+    normalized_limit = max(1, min(limit, 24))
+    cache_key = ("search", normalized_query, normalized_limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    combined = _search_products_with_fallback(
+        q,
+        local_limit=max(24, normalized_limit * 3),
+        web_limit=max(12, normalized_limit * 2),
+        max_results=max(32, normalized_limit * 4),
+    )
+    return _cache_set(cache_key, combined[:normalized_limit])
+
+
+@app.get("/products/search-page")
+def search_products_page(q: str, page: int = 1, page_size: int = 24, sort: str = "popular"):
+    normalized_query = _normalize_text(q)
+    normalized_page = max(page, 1)
+    normalized_page_size = max(1, min(page_size, 96))
+    normalized_sort = sort if sort in {"az", "priceLow", "priceHigh", "popular"} else "popular"
+    cache_key = ("search-page", normalized_query, normalized_page, normalized_page_size, normalized_sort)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    target_count = min(max(normalized_page * normalized_page_size * 3, 72), 240)
+    combined = _search_products_with_fallback(
+        q,
+        local_limit=target_count,
+        web_limit=min(max(normalized_page * normalized_page_size * 2, 24), 96),
+        max_results=target_count,
+    )
+    combined.sort(key=lambda product: _product_sort_key(product, normalized_sort))
+
+    total = len(combined)
+    total_pages = max(1, (total + normalized_page_size - 1) // normalized_page_size)
+    safe_page = min(normalized_page, total_pages)
+    start = (safe_page - 1) * normalized_page_size
+    end = start + normalized_page_size
+
+    return _cache_set(cache_key, {
+        "items": combined[start:end],
+        "total": total,
+        "page": safe_page,
+        "pageSize": normalized_page_size,
+        "totalPages": total_pages,
+    })
 
 
 @app.get("/products/category/{category_or_type}")

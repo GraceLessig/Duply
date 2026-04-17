@@ -11,6 +11,10 @@ export const firebaseApiService: DataService = {
     throw new Error('Use the backend-backed data service instead of firebaseApiService');
   },
 
+  async searchProductsPage(_query: string): Promise<CategoryProductsPage> {
+    throw new Error('Use the backend-backed data service instead of firebaseApiService');
+  },
+
   async getProductsByCategory(_category: string): Promise<CategoryProductsPage> {
     throw new Error('Use the backend-backed data service instead of firebaseApiService');
   },

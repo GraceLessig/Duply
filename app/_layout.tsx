@@ -21,6 +21,7 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="search" />
+              <Stack.Screen name="searchCatalog" />
               <Stack.Screen name="searchResults" />
               <Stack.Screen name="productDetails" />
               <Stack.Screen name="categoryProducts" />

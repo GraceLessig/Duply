@@ -2,26 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Category, CategoryProductsPage, Dupe, Product } from '../services/api';
 import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
 
-const SEARCH_FALLBACK_SUFFIXES = ['foundation', 'blush', 'lipstick', 'concealer'];
-
-function isLikelyBrandQuery(query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return false;
-  if (normalized.split(/\s+/).length > 4) return false;
-  if (/\d/.test(normalized)) return false;
-  return /^[a-z.'\-\s]+$/.test(normalized);
-}
-
-function dedupeProducts(products: Product[]) {
-  const seen = new Set<string>();
-  return products.filter(product => {
-    const key = `${product.id}:${product.brand.toLowerCase()}:${product.name.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 interface AsyncState<T> {
   data: T | null;
   loading: boolean;
@@ -69,6 +49,26 @@ export function useProductsByCategory(
   return useAsync<CategoryProductsPage>(
     () => dataService.getProductsByCategory(category, options),
     [category, options.page, options.pageSize, options.query, options.sort],
+  );
+}
+
+export function useProductSearchResults(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+) {
+  return useAsync<CategoryProductsPage>(
+    () => (
+      query.trim().length < 2
+        ? Promise.resolve({
+            items: [],
+            total: 0,
+            page: options.page || 1,
+            pageSize: options.pageSize || 24,
+            totalPages: 1,
+          })
+        : dataService.searchProductsPage(query, options)
+    ),
+    [query, options.page, options.pageSize, options.sort],
   );
 }
 
@@ -120,20 +120,9 @@ export function useSearch() {
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        let data = await dataService.searchProducts(trimmedQuery);
+        const data = await dataService.searchProducts(trimmedQuery, { limit: 8 });
 
         if (requestId !== requestIdRef.current) return;
-
-        if (data.length === 0 && isLikelyBrandQuery(trimmedQuery)) {
-          const fallbackQueries = SEARCH_FALLBACK_SUFFIXES.map(suffix => `${trimmedQuery} ${suffix}`);
-          const fallbackGroups = await Promise.all(
-            fallbackQueries.map(fallbackQuery => dataService.searchProducts(fallbackQuery).catch(() => []))
-          );
-
-          if (requestId !== requestIdRef.current) return;
-
-          data = dedupeProducts(fallbackGroups.flat()).slice(0, 8);
-        }
 
         data.slice(0, 4).forEach(seedProductCache);
         prefetchProductsById(data.slice(0, 4).map(product => product.id));

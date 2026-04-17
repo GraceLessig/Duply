@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const [query, setQuery] = useState('');
   const { results, loading: searchLoading, error: searchError, search } = useSearch();
   const { recentViews, loaded: activityLoaded, addRecentSearch } = useActivity();
-  const showingSuggestions = query.trim().length > 0;
+  const showingSuggestions = query.trim().length > 1;
   const marqueeOffset = useSharedValue(0);
   const marqueeItemWidth = 72;
   const marqueeRepeatCount = Math.max(6, Math.ceil(width / marqueeItemWidth) + 3);
@@ -65,7 +65,7 @@ export default function HomeScreen() {
   }));
 
   const openProduct = (id: string, name: string) => {
-    addRecentSearch(query);
+    addRecentSearch(query.trim());
     const selected = results.find(item => item.id === id);
     if (selected) {
       seedProductCache(selected);
@@ -141,8 +141,13 @@ export default function HomeScreen() {
                     search(text);
                   }}
                   onSubmitEditing={() => {
-                    if (results.length > 0) {
-                      openProduct(results[0].id, results[0].name);
+                    const trimmed = query.trim();
+                    if (trimmed.length > 1) {
+                      addRecentSearch(trimmed);
+                      router.push({
+                        pathname: '/searchCatalog',
+                        params: { q: trimmed },
+                      });
                     }
                   }}
                   placeholder="Search products..."
@@ -180,7 +185,6 @@ export default function HomeScreen() {
                             <Text style={styles.suggestionBrand}>{item.brand}</Text>
                             <Text style={styles.suggestionName} numberOfLines={1}>{item.name}</Text>
                           </View>
-                          <Text style={styles.suggestionPrice}>${item.price.toFixed(2)}</Text>
                         </Pressable>
                       )}
                     />
@@ -498,10 +502,6 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     color: colors.text,
     marginTop: 2,
-  },
-  suggestionPrice: {
-    ...typography.captionBold,
-    color: colors.primary,
   },
   section: {
     paddingTop: spacing.xxl,

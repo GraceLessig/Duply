@@ -128,10 +128,34 @@ async function fetchJsonWithCache<T>(url: string, options: RequestInit | undefin
   }
 }
 
-export async function searchProductsFromBackend(query: string): Promise<Product[]> {
+export async function searchProductsFromBackend(query: string, options: { limit?: number } = {}): Promise<Product[]> {
   const trimmed = query.trim().toLowerCase();
-  const url = `${BASE_URL}/products/search?q=${encodeURIComponent(query)}`;
-  return fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}`, CACHE_TTL_MS.search);
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(options.limit || 8),
+  });
+  const url = `${BASE_URL}/products/search?${params.toString()}`;
+  return fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}:${options.limit || 8}`, CACHE_TTL_MS.search);
+}
+
+export async function searchProductsPageFromBackend(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+): Promise<CategoryProductsPage> {
+  const params = new URLSearchParams({
+    q: query,
+    page: String(options.page || 1),
+    page_size: String(options.pageSize || 24),
+    sort: options.sort || 'popular',
+  });
+
+  const url = `${BASE_URL}/products/search-page?${params.toString()}`;
+  return fetchJsonWithCache<CategoryProductsPage>(
+    url,
+    undefined,
+    `search-page:${query.trim().toLowerCase()}:${params.toString()}`,
+    CACHE_TTL_MS.categoryProducts,
+  );
 }
 
 export async function getCategoriesFromBackend(): Promise<Category[]> {

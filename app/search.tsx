@@ -15,7 +15,7 @@ export default function SearchScreen() {
   const { results, loading, error, search } = useSearch();
   const { recentSearches, addRecentSearch, removeRecentSearch } = useActivity();
 
-  const showingSuggestions = query.trim().length > 0;
+  const showingSuggestions = query.trim().length > 1;
 
   useEffect(() => {
     if (params.q) {
@@ -32,7 +32,7 @@ export default function SearchScreen() {
   };
 
   const openProduct = (id: string, name: string) => {
-    addRecentSearch(query);
+    addRecentSearch(query.trim());
     const selected = results.find(item => item.id === id);
     if (selected) {
       seedProductCache(selected);
@@ -50,8 +50,13 @@ export default function SearchScreen() {
   };
 
   const handleSubmit = () => {
-    if (!showingSuggestions || results.length === 0) return;
-    openProduct(results[0].id, results[0].name);
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return;
+    addRecentSearch(trimmed);
+    router.push({
+      pathname: '/searchCatalog',
+      params: { q: trimmed },
+    });
   };
 
   const handleHistoryTap = (item: string) => {
@@ -66,7 +71,7 @@ export default function SearchScreen() {
       <View style={styles.suggestionsPanel}>
         <View style={styles.suggestionsHeader}>
           <Text style={styles.suggestionsTitle}>Suggestions</Text>
-          <Text style={styles.suggestionsSubtitle}>Press Enter to pick the top result</Text>
+          <Text style={styles.suggestionsSubtitle}>Press Enter to browse all matching products</Text>
         </View>
 
         {loading ? (
@@ -94,7 +99,6 @@ export default function SearchScreen() {
                 <View style={styles.resultInfo}>
                   <Text style={styles.resultBrand}>{item.brand}</Text>
                   <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.resultPrice}>${item.price.toFixed(2)}</Text>
                 </View>
               </Pressable>
             )}
@@ -300,11 +304,6 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     color: colors.text,
     marginTop: 1,
-  },
-  resultPrice: {
-    ...typography.captionBold,
-    color: colors.success,
-    marginTop: 2,
   },
   historyHeader: {
     paddingHorizontal: spacing.lg,
