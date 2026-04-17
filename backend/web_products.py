@@ -5,10 +5,11 @@ import json
 import os
 import re
 import time
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from firestore_products import (
@@ -38,6 +39,9 @@ WEB_IMAGE_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_IMAGE_CACHE_TTL_SECONDS",
 WEB_PRODUCT_INFO_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_WEB_PRODUCT_INFO_CACHE_TTL_SECONDS", "86400"))
 URL_STATUS_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_URL_STATUS_CACHE_TTL_SECONDS", "21600"))
 URL_CHECK_TIMEOUT_SECONDS = int(os.getenv("DUPLY_URL_CHECK_TIMEOUT_SECONDS", "5"))
+CACHE_SCHEMA_VERSION = os.getenv("DUPLY_CACHE_SCHEMA_VERSION", "us-retailers-v3").strip() or "us-retailers-v3"
+OFFICIAL_RETAILER_TIMEOUT_SECONDS = int(os.getenv("DUPLY_OFFICIAL_RETAILER_TIMEOUT_SECONDS", "12"))
+OFFICIAL_RETAILER_MAX_WORKERS = int(os.getenv("DUPLY_OFFICIAL_RETAILER_MAX_WORKERS", "6"))
 
 DEAD_PAGE_MARKERS = [
     "product not found", "page not found", "404 not found", "error 404",
@@ -111,6 +115,20 @@ NON_US_COUNTRY_TLDS = {
     ".eu", ".fr", ".hk", ".ie", ".in", ".it", ".jp", ".kr", ".mx", ".nl",
     ".no", ".nz", ".pl", ".se", ".sg", ".tr", ".tw", ".uk", ".vn", ".za",
 }
+OFFICIAL_US_RETAILERS = {
+    "sephora": {
+        "displayName": "Sephora",
+        "sitemaps": ["https://www.sephora.com/sitemaps/products-sitemap.xml"],
+        "productUrlPattern": r"^https://www\.sephora\.com/product/[^?#]+$",
+        "siteSuffixes": ["| Sephora", " | Sephora", "- Sephora"],
+    },
+    "ulta": {
+        "displayName": "Ulta Beauty",
+        "sitemaps": ["https://www.ulta.com/sitemap/p.xml"],
+        "productUrlPattern": r"^https://www\.ulta\.com/p/[^?#]+(?:\?sku=\d+)?$",
+        "siteSuffixes": ["| Ulta Beauty", " | Ulta Beauty", "- Ulta Beauty"],
+    },
+}
 
 
 def _cache_ttl(cache):
@@ -130,6 +148,10 @@ def _cache_get(cache, key):
 
 def _cache_set(cache, key, value):
     cache[key] = (time.time(), value)
+
+
+def _versioned_key(*parts):
+    return (CACHE_SCHEMA_VERSION, *parts)
 
 
 def _restore_cached_products(products):
@@ -225,6 +247,20 @@ def _find_supported_brand(text):
     return matches[0][1] if matches else ""
 
 
+def _fetch_text_url(url, timeout=OFFICIAL_RETAILER_TIMEOUT_SECONDS, headers=None):
+    request_headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; Duply/1.0)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    if headers:
+        request_headers.update(headers)
+
+    request = Request(url, headers=request_headers)
+    with urlopen(request, timeout=timeout) as response:
+        return response.read().decode("utf-8", errors="ignore"), response.geturl()
+
+
 def _source_domain(url):
     match = re.search(r"https?://(?:www\.)?([^/?#]+)", str(url or ""), flags=re.IGNORECASE)
     return match.group(1).lower() if match else ""
@@ -245,6 +281,41 @@ def is_approved_retailer_url(url):
     url = str(url or "").strip()
     domain = _source_domain(url)
     return url.startswith(("http://", "https://")) and "." in domain and _is_us_domain(domain)
+
+
+def _clean_product_title(title, retailer=""):
+    cleaned = html.unescape(str(title or "").strip())
+    for suffix in (OFFICIAL_US_RETAILERS.get(normalize_text(retailer), {}) or {}).get("siteSuffixes", []):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[: -len(suffix)].strip()
+    return cleaned.strip(" -|")
+
+
+def _normalize_retailer_name(value):
+    normalized = normalize_text(value)
+    if normalized in OFFICIAL_US_RETAILERS:
+        return normalized
+    for key, config in OFFICIAL_US_RETAILERS.items():
+        if normalize_text(config.get("displayName")) == normalized:
+            return key
+    return normalized
+
+
+def _is_merchandise_product_title(title, url=""):
+    text = normalize_text(title)
+    page_url = normalize_text(url)
+    blocked_markers = [
+        "gift with purchase",
+        "free gift",
+        "free ",
+        "sample pack",
+        "gwp",
+    ]
+    if any(marker in text for marker in blocked_markers):
+        return False
+    if "/gwp" in page_url:
+        return False
+    return True
 
 
 def _looks_like_missing_page(page_html, final_url=""):
@@ -459,7 +530,7 @@ def _fetch_product_info(candidate):
     )
     if not identifier or not _has_dataforseo_credentials():
         return {}
-    key = ("product-info", normalize_text(identifier))
+    key = _versioned_key("product-info", normalize_text(identifier))
     cached = _cache_get(_search_cache, key)
     if cached is not None:
         return cached
@@ -537,6 +608,230 @@ def _extract_product_info_title(product_info, fallback_title=""):
     return fallback_title
 
 
+def _extract_meta_content(page_html, property_name):
+    patterns = [
+        rf'<meta[^>]+property=["\']{re.escape(property_name)}["\'][^>]+content=["\']([^"\']+)["\']',
+        rf'<meta[^>]+name=["\']{re.escape(property_name)}["\'][^>]+content=["\']([^"\']+)["\']',
+        rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']{re.escape(property_name)}["\']',
+        rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']{re.escape(property_name)}["\']',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, page_html, flags=re.IGNORECASE)
+        if match:
+            return html.unescape(match.group(1).replace("\\/", "/").strip())
+    return ""
+
+
+def _extract_json_ld_objects(page_html):
+    objects = []
+    for match in re.finditer(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', page_html, flags=re.IGNORECASE | re.DOTALL):
+        raw = match.group(1).strip()
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            continue
+        if isinstance(parsed, list):
+            objects.extend(item for item in parsed if isinstance(item, dict))
+        elif isinstance(parsed, dict):
+            objects.append(parsed)
+    return objects
+
+
+def _flatten_json_ld_product_candidates(objects):
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        if normalize_text(item.get("@type")) == "product":
+            yield item
+        graph = item.get("@graph")
+        if isinstance(graph, list):
+            for child in graph:
+                if isinstance(child, dict) and normalize_text(child.get("@type")) == "product":
+                    yield child
+
+
+def _extract_breadcrumb_category(page_html):
+    for item in _extract_json_ld_objects(page_html):
+        if normalize_text(item.get("@type")) != "breadcrumblist":
+            continue
+        breadcrumb_items = item.get("itemListElement") or []
+        names = []
+        for breadcrumb in breadcrumb_items:
+            entry = breadcrumb.get("item") if isinstance(breadcrumb, dict) else None
+            if isinstance(entry, dict):
+                name = entry.get("name")
+            else:
+                name = None
+            if name:
+                names.append(str(name).strip())
+        if names:
+            return names[-1]
+    return ""
+
+
+def _normalize_official_offer(url, retailer, title, price, availability_status, image=""):
+    clean_url = str(url or "").strip()
+    clean_price = _extract_price(price)
+    if not clean_url or not is_approved_retailer_url(clean_url):
+        return None
+    return {
+        "id": f"offer-{hashlib.sha1(clean_url.encode('utf-8')).hexdigest()[:14]}",
+        "retailer": retailer,
+        "title": title,
+        "price": clean_price,
+        "url": clean_url,
+        "image": image or "",
+        "shipping": availability_status or "",
+        "source": normalize_text(retailer),
+        "matchConfidence": 100,
+    }
+
+
+def _parse_official_retailer_product_page(url, retailer):
+    retailer_key = _normalize_retailer_name(retailer)
+    config = OFFICIAL_US_RETAILERS.get(retailer_key) or {}
+    try:
+        page_html, final_url = _fetch_text_url(url)
+    except Exception:
+        return None
+
+    if not is_approved_retailer_url(final_url) or _looks_like_missing_page(page_html, final_url):
+        return None
+
+    product_objects = list(_flatten_json_ld_product_candidates(_extract_json_ld_objects(page_html)))
+    product_data = product_objects[0] if product_objects else {}
+    offers = product_data.get("offers") or {}
+    if isinstance(offers, list):
+        offers = offers[0] if offers else {}
+    brand_value = product_data.get("brand")
+    if isinstance(brand_value, dict):
+        brand_value = brand_value.get("name")
+
+    title = (
+        product_data.get("name")
+        or _extract_meta_content(page_html, "og:title")
+        or Path(urlparse(final_url).path).name.replace("-", " ")
+    )
+    title = _clean_product_title(title, retailer_key)
+    if not _is_merchandise_product_title(title, final_url):
+        return None
+    brand = str(brand_value or _find_supported_brand(title) or "").strip()
+    image = (
+        product_data.get("image")
+        or _extract_meta_content(page_html, "og:image")
+        or ""
+    )
+    if isinstance(image, list):
+        image = image[0] if image else ""
+    price = (
+        offers.get("price")
+        or _extract_meta_content(page_html, "product:price:amount")
+        or _extract_meta_content(page_html, "twitter:data1")
+    )
+    rating = 0
+    review_count = 0
+    aggregate_rating = product_data.get("aggregateRating") or {}
+    if isinstance(aggregate_rating, dict):
+        rating = float(aggregate_rating.get("ratingValue") or 0)
+        review_count = int(float(aggregate_rating.get("reviewCount") or 0))
+    availability = str(offers.get("availability") or "").strip()
+    availability_status = availability.rsplit("/", 1)[-1] if availability else ""
+    category = _extract_breadcrumb_category(page_html)
+    product_type = normalize_product_type(category or _infer_product_type(title))
+    clean_price = _extract_price(price)
+    official_offer = _normalize_official_offer(
+        offers.get("url") or final_url,
+        config.get("displayName") or retailer,
+        title,
+        clean_price,
+        availability_status,
+        image=image,
+    )
+
+    if not brand or not title or not official_offer:
+        return None
+
+    return {
+        "firestore_id": build_catalog_product_id({"brand": brand, "product_name": title, "type": product_type}),
+        "brand": brand,
+        "product_name": title,
+        "category": product_type,
+        "subcategory": product_type,
+        "type": product_type,
+        "price": clean_price,
+        "rating": rating,
+        "image": image or "",
+        "website": config.get("displayName") or retailer,
+        "title-href": official_offer["url"],
+        "source": retailer_key,
+        "availabilityStatus": normalize_text(availability_status or "active"),
+        "merchantOffers": [official_offer],
+        "merchantDomain": _source_domain(official_offer["url"]),
+        "raw": {
+            "source": retailer_key,
+            "productUrl": official_offer["url"],
+            "merchantOffers": [official_offer],
+            "availabilityStatus": availability_status,
+            "category": category,
+        },
+        "numberOfReviews": review_count,
+    }
+
+
+def _collect_sitemap_product_urls(sitemap_urls, product_url_pattern, max_urls=0):
+    cache_key = {
+        "sitemaps": list(sitemap_urls or []),
+        "pattern": product_url_pattern,
+    }
+    cached = get_firestore_web_cache("official-retailer-sitemap-urls", json.dumps(cache_key, sort_keys=True), WEB_IMAGE_CACHE_TTL_SECONDS)
+    if isinstance(cached, list) and cached:
+        return cached[:max_urls] if max_urls else cached
+
+    queue = list(sitemap_urls or [])
+    visited = set()
+    product_urls = []
+    pattern = re.compile(product_url_pattern, flags=re.IGNORECASE)
+
+    while queue:
+        sitemap_url = queue.pop(0)
+        if sitemap_url in visited:
+            continue
+        visited.add(sitemap_url)
+
+        try:
+            xml_text, _ = _fetch_text_url(sitemap_url)
+            root = ET.fromstring(xml_text)
+        except Exception:
+            continue
+
+        namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        sitemap_nodes = root.findall("sm:sitemap", namespace) or root.findall("sitemap")
+        if sitemap_nodes:
+            for node in sitemap_nodes:
+                loc = node.findtext("sm:loc", default="", namespaces=namespace) or node.findtext("loc", default="")
+                loc = str(loc or "").strip()
+                if loc and loc not in visited:
+                    queue.append(loc)
+            continue
+
+        url_nodes = root.findall("sm:url", namespace) or root.findall("url")
+        for node in url_nodes:
+            loc = node.findtext("sm:loc", default="", namespaces=namespace) or node.findtext("loc", default="")
+            loc = str(loc or "").strip()
+            if not loc or not pattern.match(loc):
+                continue
+            product_urls.append(loc)
+            if max_urls and len(product_urls) >= max_urls:
+                set_firestore_web_cache("official-retailer-sitemap-urls", json.dumps(cache_key, sort_keys=True), product_urls)
+                return product_urls
+
+    if product_urls:
+        set_firestore_web_cache("official-retailer-sitemap-urls", json.dumps(cache_key, sort_keys=True), product_urls)
+    return product_urls
+
+
 def _normalize_candidate(candidate, product_info=None):
     product_info = product_info or {}
     title = _extract_product_info_title(product_info, str(candidate.get("title") or "").strip())
@@ -599,7 +894,7 @@ def search_web_products(query, limit=12):
     normalized_query = normalize_text(query)
     if not normalized_query or not _has_dataforseo_credentials():
         return []
-    key = ("web-search", normalized_query, limit)
+    key = _versioned_key("web-search", normalized_query, limit)
     cached = _load_persistent_cache(_search_cache, "web-search", key)
     if cached is not None:
         return cached
@@ -640,7 +935,7 @@ def _search_brand_catalog(brand, category_or_type="", limit=12, enrich_product_i
         return []
     query_term = (search_term_override or "").strip() or CATEGORY_SEARCH_TERMS.get(normalize_product_type(category_or_type), category_or_type or "makeup")
     query = f"{display_brand} {query_term}".strip()
-    key = ("brand-catalog", normalize_text(display_brand), normalize_product_type(category_or_type), normalize_text(query_term), limit, enrich_product_info)
+    key = _versioned_key("brand-catalog", normalize_text(display_brand), normalize_product_type(category_or_type), normalize_text(query_term), limit, enrich_product_info)
     cached = _load_persistent_cache(_search_cache, "brand-catalog", key)
     if cached is not None:
         return cached
@@ -771,7 +1066,7 @@ def _query_variants(brand, product_name):
 def find_price_matches(brand, product_name, product_url="", limit=8):
     if not product_name or not _has_dataforseo_credentials():
         return []
-    key = ("price-match", normalize_text(brand), normalize_text(product_name), normalize_text(product_url), limit)
+    key = _versioned_key("price-match", normalize_text(brand), normalize_text(product_name), normalize_text(product_url), limit)
     cached = _load_persistent_cache(_price_match_cache, "price-match", key)
     if cached is not None:
         return cached
@@ -869,6 +1164,64 @@ def _brand_seed_queries(brand, categories):
     return queries
 
 
+def augment_official_us_retailers(retailers=None, max_urls_per_retailer=0, start_index=0):
+    selected_retailers = [
+        _normalize_retailer_name(retailer)
+        for retailer in (retailers or list(OFFICIAL_US_RETAILERS.keys()))
+        if _normalize_retailer_name(retailer) in OFFICIAL_US_RETAILERS
+    ]
+    results_summary = []
+    all_products = []
+    seen = set()
+
+    for retailer in selected_retailers:
+        config = OFFICIAL_US_RETAILERS[retailer]
+        sitemap_urls = _collect_sitemap_product_urls(
+            config.get("sitemaps"),
+            config.get("productUrlPattern"),
+            0,
+        )
+        scoped_urls = sitemap_urls[start_index:]
+        if max_urls_per_retailer:
+            scoped_urls = scoped_urls[:max_urls_per_retailer]
+
+        retailer_products = []
+        with ThreadPoolExecutor(max_workers=max(1, OFFICIAL_RETAILER_MAX_WORKERS)) as executor:
+            futures = {
+                executor.submit(_parse_official_retailer_product_page, url, retailer): url
+                for url in scoped_urls
+            }
+            for future in as_completed(futures):
+                try:
+                    product = future.result()
+                except Exception:
+                    product = None
+                if not product:
+                    continue
+                key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+                if key in seen:
+                    continue
+                seen.add(key)
+                retailer_products.append(product)
+                all_products.append(product)
+
+        results_summary.append({
+            "retailer": retailer,
+            "displayName": config.get("displayName"),
+            "urlsDiscovered": len(sitemap_urls),
+            "urlsProcessed": len(scoped_urls),
+            "productsParsed": len(retailer_products),
+            "startIndex": start_index,
+            "nextStartIndex": start_index + len(scoped_urls),
+        })
+
+    return {
+        "retailers": results_summary,
+        "productsFound": len(all_products),
+        "firestore": upsert_firestore_products(all_products),
+    }
+
+
 def augment_firestore_catalog_with_top_brands(brands=None, categories=None, per_query_limit=12):
     selected_brands = brands or list(TOP_BRANDS.values())
     selected_categories = categories or DEFAULT_AUGMENT_CATEGORIES
@@ -910,4 +1263,6 @@ def get_dataforseo_status():
         "os": DATAFORSEO_OS,
         "topBrandCount": len(TOP_BRANDS),
         "defaultAugmentCategoryCount": len(DEFAULT_AUGMENT_CATEGORIES),
+        "officialRetailerCount": len(OFFICIAL_US_RETAILERS),
+        "cacheSchemaVersion": CACHE_SCHEMA_VERSION,
     }

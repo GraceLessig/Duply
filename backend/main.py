@@ -20,6 +20,7 @@ from firestore_products import (
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
 from web_products import (
+    augment_official_us_retailers,
     augment_firestore_catalog_with_top_brands,
     find_price_matches,
     find_product_image,
@@ -72,8 +73,9 @@ def _normalize_number(value, default=0):
 
 
 def _normalize_price(value):
+    raw_value = str(value).strip() if value is not None else ""
     price = _normalize_number(value, 0)
-    if price > 100:
+    if price >= 1000 and re.fullmatch(r"\d+(?:\.0+)?", raw_value):
         return round(price / 100, 2)
     return round(price, 2)
 
@@ -666,6 +668,108 @@ def _search_products_with_fallback(q: str, local_limit: int, web_limit: int, max
     return _dedupe_products(fallback_results, require_image=False)[:max_results]
 
 
+def _offer_identity_key(offer):
+    return (
+        _normalize_text(offer.get("retailer")),
+        _normalize_text(offer.get("title")),
+        _normalize_text(offer.get("url")),
+    )
+
+
+def _normalize_price_offer(offer, brand="", name=""):
+    url = str(offer.get("url") or "").strip()
+    title = str(offer.get("title") or f"{brand} {name}".strip()).strip()
+    price = _normalize_price(offer.get("price"))
+    if not url or price <= 0:
+        return None
+    if not is_approved_retailer_url(url) or not is_live_product_url(url):
+        return None
+    return {
+        "id": offer.get("id") or f"offer-{abs(hash((title, url))) % 10**12}",
+        "retailer": offer.get("retailer") or "",
+        "title": title,
+        "price": price,
+        "url": url,
+        "image": offer.get("image") or "",
+        "shipping": offer.get("shipping") or "",
+        "source": offer.get("source") or "catalog",
+        "matchConfidence": int(offer.get("matchConfidence") or title_match_confidence(title, brand, name)),
+    }
+
+
+def _catalog_price_matches(brand: str, name: str, limit: int = 12):
+    offers = []
+    seen = set()
+    query = f"{brand} {name}".strip()
+
+    for record in search_firestore_products(query, limit=max(limit * 10, 40)):
+        product = _coerce_to_display_product(
+            record,
+            fallback={"id": record.get("firestore_id", "")},
+            enrich_image=False,
+        )
+        if not product or not product.get("productUrl"):
+            continue
+
+        confidence = title_match_confidence(product.get("name"), brand, name)
+        if confidence < 50:
+            continue
+
+        normalized_offer = _normalize_price_offer({
+            "id": f"catalog-{product.get('id')}",
+            "retailer": record.get("source") or record.get("website") or product.get("source") or "catalog",
+            "title": product.get("name"),
+            "price": product.get("price"),
+            "url": product.get("productUrl"),
+            "image": product.get("image"),
+            "source": record.get("source") or "catalog",
+            "matchConfidence": confidence,
+        }, brand=brand, name=name)
+        if not normalized_offer:
+            continue
+
+        key = _offer_identity_key(normalized_offer)
+        if key in seen:
+            continue
+        seen.add(key)
+        offers.append(normalized_offer)
+
+    offers.sort(
+        key=lambda offer: (
+            normalize_text(offer.get("retailer")) not in {"sephora", "ulta", "ulta beauty"},
+            offer.get("price", 0),
+            -(offer.get("matchConfidence") or 0),
+            normalize_text(offer.get("retailer")),
+        )
+    )
+    return offers[:limit]
+
+
+def _merge_price_offers(*offer_groups, brand="", name="", limit=3):
+    merged = []
+    seen = set()
+    for group in offer_groups:
+        for offer in group or []:
+            normalized_offer = _normalize_price_offer(offer, brand=brand, name=name)
+            if not normalized_offer:
+                continue
+            key = _offer_identity_key(normalized_offer)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(normalized_offer)
+
+    merged.sort(
+        key=lambda offer: (
+            normalize_text(offer.get("retailer")) not in {"sephora", "ulta", "ulta beauty"},
+            offer.get("price", 0),
+            -(offer.get("matchConfidence") or 0),
+            normalize_text(offer.get("retailer")),
+        )
+    )
+    return merged[:limit]
+
+
 @app.get("/health")
 def health():
     return {"ok": True, **get_recommendation_status()}
@@ -708,6 +812,27 @@ async def augment_top_brands(request: Request):
             per_query_limit=per_query_limit,
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/augment-us-retailers")
+async def augment_us_retailers(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    retailers = body.get("retailers") or None
+    max_urls_per_retailer = max(0, int(body.get("maxUrlsPerRetailer") or 0))
+    start_index = max(0, int(body.get("startIndex") or 0))
+
+    try:
+        return augment_official_us_retailers(
+            retailers=retailers,
+            max_urls_per_retailer=max_urls_per_retailer,
+            start_index=start_index,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -852,32 +977,33 @@ async def get_price_matches(request: Request):
         if cached is not None:
             return cached
 
+        stored_offers = []
         if product_id:
             product = get_firestore_product_by_id(product_id)
             merchant_offers = ((product or {}).get("raw") or {}).get("merchantOffers") or []
-            normalized_offers = []
             for index, offer in enumerate(merchant_offers):
-                url = offer.get("url") or ""
-                price = _normalize_price(offer.get("price"))
-                if not url or price <= 0 or not is_approved_retailer_url(url) or not is_live_product_url(url):
-                    continue
-                normalized_offers.append({
+                stored_offers.append({
                     "id": offer.get("id") or f"stored-offer-{index}",
                     "retailer": offer.get("retailer") or "",
                     "title": offer.get("title") or f"{brand} {name}".strip(),
-                    "price": price,
-                    "url": url,
+                    "price": offer.get("price"),
+                    "url": offer.get("url") or "",
                     "image": offer.get("image") or "",
                     "shipping": offer.get("shipping") or "",
                     "source": offer.get("source") or "catalog",
                     "matchConfidence": offer.get("matchConfidence") or 100,
                 })
-                if len(normalized_offers) >= 3:
-                    break
-            if normalized_offers:
-                return _cache_set(cache_key, normalized_offers[:3])
-
-        return _cache_set(cache_key, find_price_matches(brand, name, product_url=body.get("productUrl", ""), limit=3))
+        catalog_offers = _catalog_price_matches(brand, name, limit=12)
+        live_offers = find_price_matches(brand, name, product_url=body.get("productUrl", ""), limit=12)
+        merged = _merge_price_offers(
+            catalog_offers,
+            stored_offers,
+            live_offers,
+            brand=brand,
+            name=name,
+            limit=3,
+        )
+        return _cache_set(cache_key, merged)
     except HTTPException:
         raise
     except Exception as e:
