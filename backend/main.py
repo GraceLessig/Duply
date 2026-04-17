@@ -98,6 +98,119 @@ def _normalize_text(value):
     return str(value).strip().lower()
 
 
+GENERIC_NAME_STOPWORDS = {
+    "the", "and", "for", "with", "new", "mini", "travel", "size", "set",
+    "kit", "makeup", "cosmetics", "beauty", "collection",
+}
+SHADE_MARKER_TOKENS = {
+    "shade", "shades", "color", "colors", "colour", "colours", "hue", "tone",
+}
+
+
+def _normalized_word_tokens(value):
+    return re.findall(r"[a-z0-9]+", _normalize_text(value))
+
+
+def _brandless_name_tokens(name: str, brand: str = ""):
+    brand_tokens = {token for token in _normalized_word_tokens(brand) if token}
+    tokens = []
+    for token in _normalized_word_tokens(name):
+        if token in brand_tokens:
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def _shared_prefix_length(tokens_a, tokens_b):
+    count = 0
+    for left, right in zip(tokens_a, tokens_b):
+        if left != right:
+            break
+        count += 1
+    return count
+
+
+def _explicit_family_name_tokens(name: str, brand: str = ""):
+    normalized_name = _normalize_text(name)
+    if not normalized_name:
+        return ()
+
+    normalized_name = re.sub(
+        r"\((?:[^)]*?(?:shade|color|colour|hue|tone)[^)]*?)\)",
+        "",
+        normalized_name,
+        flags=re.IGNORECASE,
+    )
+    normalized_name = re.sub(
+        r"\s+(?:in\s+)?(?:shade|color|colour|hue|tone)s?\s+.+$",
+        "",
+        normalized_name,
+        flags=re.IGNORECASE,
+    )
+    normalized_name = re.sub(r"\s[-:|/]\s.+$", "", normalized_name)
+
+    return tuple(_brandless_name_tokens(normalized_name, brand))
+
+
+def _is_same_product_family_variant(original_source, dupe_source):
+    original = _build_comparison_profile(original_source)
+    dupe = _build_comparison_profile(dupe_source)
+
+    original_brand = _normalize_text(original.get("brand"))
+    dupe_brand = _normalize_text(dupe.get("brand"))
+    if not original_brand or original_brand != dupe_brand:
+        return False
+
+    original_type = normalize_product_type(original.get("product_type") or original.get("category"))
+    dupe_type = normalize_product_type(dupe.get("product_type") or dupe.get("category"))
+    if original_type and dupe_type and original_type != dupe_type:
+        return False
+
+    original_tokens = _brandless_name_tokens(original.get("name"), original.get("brand"))
+    dupe_tokens = _brandless_name_tokens(dupe.get("name"), dupe.get("brand"))
+    if len(original_tokens) < 3 or len(dupe_tokens) < 3:
+        return False
+
+    if original_tokens == dupe_tokens:
+        return True
+
+    explicit_original_family = _explicit_family_name_tokens(original.get("name"), original.get("brand"))
+    explicit_dupe_family = _explicit_family_name_tokens(dupe.get("name"), dupe.get("brand"))
+    if (
+        explicit_original_family
+        and explicit_original_family == explicit_dupe_family
+        and explicit_original_family != tuple(original_tokens)
+        and explicit_dupe_family != tuple(dupe_tokens)
+    ):
+        return True
+
+    shared_prefix = _shared_prefix_length(original_tokens, dupe_tokens)
+    min_length = min(len(original_tokens), len(dupe_tokens))
+    original_suffix = original_tokens[shared_prefix:]
+    dupe_suffix = dupe_tokens[shared_prefix:]
+    if not original_suffix or not dupe_suffix:
+        return False
+
+    if shared_prefix < max(3, min_length - 2):
+        return False
+
+    if len(original_suffix) > 2 or len(dupe_suffix) > 2:
+        return False
+
+    blocked_suffix_tokens = GENERIC_NAME_STOPWORDS | SHADE_MARKER_TOKENS
+    if any(token in blocked_suffix_tokens for token in [*original_suffix, *dupe_suffix]):
+        return False
+
+    original_price = _normalize_price(original.get("price"))
+    dupe_price = _normalize_price(dupe.get("price"))
+    if original_price > 0 and dupe_price > 0:
+        relative_diff = abs(original_price - dupe_price) / max(original_price, dupe_price)
+        if relative_diff > 0.35:
+            return False
+
+    return True
+
+
 def _build_comparison_profile(source):
     raw = source.get("raw", {}) if source else {}
     category = source.get("category") or raw.get("Category") or raw.get("category") or ""
@@ -139,6 +252,9 @@ def _rating_similarity_score(original_rating, dupe_rating, max_points):
 def _compute_match_percentage(original_source, dupe_source):
     original = _build_comparison_profile(original_source)
     dupe = _build_comparison_profile(dupe_source)
+
+    if _is_same_product_family_variant(original_source, dupe_source):
+        return 0.0
 
     score = 0.0
     max_score = 0.0
@@ -183,6 +299,9 @@ def _compute_match_percentage(original_source, dupe_source):
 def _build_match_reason(original_source, dupe_source):
     original = _build_comparison_profile(original_source)
     dupe = _build_comparison_profile(dupe_source)
+
+    if _is_same_product_family_variant(original_source, dupe_source):
+        return "Same product family in a different shade"
 
     reasons = []
 
@@ -658,6 +777,8 @@ def _fallback_dupe_candidates(original_product, brand: str, name: str, product_t
             enrich_image=False,
         )
         if not candidate:
+            continue
+        if _is_same_product_family_variant(original_product, candidate):
             continue
         identity = _product_identity_key(candidate)
         if identity == _product_identity_key(original_product) or identity in seen:
@@ -1944,6 +2065,8 @@ async def get_dupes(request: Request):
             dupe = _resolve_live_product(dupe) or dupe
             dupe = _ensure_product_image(dupe)
             if not dupe:
+                continue
+            if _is_same_product_family_variant(original_firestore or original, firestore_record or dupe_source):
                 continue
             savings = max(original["price"] - dupe["price"], 0)
             similarity = _compute_match_percentage(
