@@ -24,6 +24,8 @@ export interface ProfileContextValue {
   resetProfile: () => void;
 }
 
+const SAVE_TIMEOUT_MS = 15000;
+
 const DEFAULT_PROFILE: ProfilePreferences = {
   displayName: 'Display Name',
   photoUri: '',
@@ -73,6 +75,13 @@ function profileErrorMessage(error: unknown, fallback: string) {
     return `${fallback} (${error.code})`;
   }
 
+  if (error instanceof Error) {
+    if (error.message.includes('timeout')) {
+      return 'The profile update timed out. Check your connection, Firebase Storage rules, and Firestore rules.';
+    }
+    return fallback;
+  }
+
   return fallback;
 }
 
@@ -92,12 +101,30 @@ async function uriToBlob(uri: string) {
   }
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<ProfilePreferences>(DEFAULT_PROFILE);
   const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const saving = isSavingProfile || isUploadingPhoto;
 
   const fallbackProfile = useMemo<ProfilePreferences>(() => ({
     displayName: user?.displayName || DEFAULT_PROFILE.displayName,
@@ -117,20 +144,20 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     const remoteDoc = uid ? profileDoc(uid) : null;
     if (!uid || !remoteDoc) return;
 
-    setSaving(true);
+    setIsSavingProfile(true);
     setError(null);
     try {
-      await setDoc(remoteDoc, {
+      await withTimeout(setDoc(remoteDoc, {
         displayName: next.displayName.trim() || DEFAULT_PROFILE.displayName,
         username: next.displayName.trim() || DEFAULT_PROFILE.displayName,
         photoUri: next.photoUri,
         email: user.email || '',
         updatedAt: serverTimestamp(),
-      }, { merge: true });
+      }, { merge: true }), SAVE_TIMEOUT_MS, 'profile-save-timeout');
     } catch (err) {
       setError(profileErrorMessage(err, 'Could not save your synced profile right now.'));
     } finally {
-      setSaving(false);
+      setIsSavingProfile(false);
     }
   }, [user?.email, user?.uid]);
 
@@ -170,9 +197,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             ? normalizeProfile(snapshot.data() as Partial<ProfilePreferences>, fallbackProfile)
             : cachedProfile;
           setProfile(next);
-          persist(next, uid);
+          void persist(next, uid);
           if (!snapshot.exists()) {
-            saveRemoteProfile(next);
+            void saveRemoteProfile(next);
           }
           setLoaded(true);
         },
@@ -192,8 +219,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback((updates: Partial<ProfilePreferences>) => {
     setProfile(prev => {
       const next = normalizeProfile({ ...prev, ...updates }, fallbackProfile);
-      persist(next, user?.uid);
-      saveRemoteProfile(next);
+      void persist(next, user?.uid);
+      void saveRemoteProfile(next);
       return next;
     });
   }, [fallbackProfile, persist, saveRemoteProfile, user?.uid]);
@@ -205,27 +232,30 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setSaving(true);
+    setIsUploadingPhoto(true);
     setError(null);
     try {
-      const blob = await uriToBlob(uri);
+      const blob = await withTimeout(uriToBlob(uri), SAVE_TIMEOUT_MS, 'profile-photo-read-timeout');
       const uploadType = mimeType || blob.type || 'image/jpeg';
       const imageRef = ref(firebaseStorage, `profilePhotos/${uid}/avatar-${Date.now()}.${fileExtension(uploadType)}`);
 
-      await uploadBytes(imageRef, blob, { contentType: uploadType });
-      const downloadUrl = await getDownloadURL(imageRef);
-      updateProfile({ photoUri: downloadUrl });
+      await withTimeout(uploadBytes(imageRef, blob, { contentType: uploadType }), SAVE_TIMEOUT_MS, 'profile-photo-upload-timeout');
+      const downloadUrl = await withTimeout(getDownloadURL(imageRef), SAVE_TIMEOUT_MS, 'profile-photo-url-timeout');
+      const next = normalizeProfile({ ...profile, photoUri: downloadUrl }, fallbackProfile);
+      setProfile(next);
+      void persist(next, user?.uid);
+      await saveRemoteProfile(next);
     } catch (err) {
       setError(profileErrorMessage(err, 'Could not upload your profile photo right now.'));
     } finally {
-      setSaving(false);
+      setIsUploadingPhoto(false);
     }
-  }, [updateProfile, user?.uid]);
+  }, [fallbackProfile, persist, profile, saveRemoteProfile, user?.uid]);
 
   const resetProfile = useCallback(() => {
     const next = fallbackProfile;
     setProfile(next);
-    persist(next, user?.uid);
+    void persist(next, user?.uid);
 
     const uid = user?.uid;
     const remoteDoc = uid ? profileDoc(uid) : null;

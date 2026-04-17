@@ -243,6 +243,72 @@ def _product_from_record(record, fallback=None, enrich_image=False):
     }
 
 
+def _product_identity_key(product):
+    return (
+        _normalize_text(product.get("brand")),
+        _normalize_text(product.get("name")),
+        normalize_product_type(product.get("productType") or product.get("category")),
+    )
+
+
+def _finalize_product(product):
+    if not product:
+        return None
+
+    normalized = {
+        **product,
+        "id": str(product.get("id") or "").strip(),
+        "name": str(product.get("name") or "").strip(),
+        "brand": str(product.get("brand") or "").strip(),
+        "image": str(product.get("image") or "").strip(),
+        "category": str(product.get("category") or "").strip(),
+        "productType": normalize_product_type(product.get("productType") or product.get("category") or ""),
+        "productUrl": str(product.get("productUrl") or "").strip(),
+        "source": product.get("source") or "catalog",
+        "price": _normalize_price(product.get("price")),
+        "rating": _normalize_number(product.get("rating"), 0),
+        "countryOfOrigin": str(product.get("countryOfOrigin") or "").strip(),
+        "crueltyFree": str(product.get("crueltyFree") or "").strip(),
+        "genderTarget": str(product.get("genderTarget") or "").strip(),
+        "mainIngredient": str(product.get("mainIngredient") or "").strip(),
+        "packagingType": str(product.get("packagingType") or "").strip(),
+        "productSize": str(product.get("productSize") or "").strip(),
+        "skinType": str(product.get("skinType") or "").strip(),
+        "numberOfReviews": int(_normalize_number(product.get("numberOfReviews"), 0)),
+    }
+
+    if not normalized["id"]:
+        normalized["id"] = _slugify(f"{normalized['brand']}-{normalized['name']}")
+
+    if not normalized["name"] or not normalized["brand"]:
+        return None
+    if not normalized["category"] or not normalized["productType"]:
+        return None
+    if normalized["price"] <= 0:
+        return None
+    if not normalized["image"]:
+        return None
+
+    return normalized
+
+
+def _dedupe_products(products):
+    deduped = []
+    seen = set()
+
+    for product in products:
+        finalized = _finalize_product(product)
+        if not finalized:
+            continue
+        key = _product_identity_key(finalized)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finalized)
+
+    return deduped
+
+
 def _is_product_available(product):
     if not product:
         return False
@@ -314,12 +380,14 @@ def search_products(q: str):
         if key in seen:
             continue
         seen.add(key)
-        normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+        normalized_product = _finalize_product(
+            _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+        )
         if not _is_product_available(normalized_product):
             continue
         combined.append(normalized_product)
 
-    return _cache_set(cache_key, combined[:28])
+    return _cache_set(cache_key, _dedupe_products(combined)[:28])
 
 
 @app.get("/products/category/{category_or_type}")
@@ -344,6 +412,7 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=index < 8,
         )
+        normalized_product = _finalize_product(normalized_product)
         if not _is_product_available(normalized_product):
             continue
         available_items.append(normalized_product)
@@ -354,6 +423,7 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=False,
         )
+        normalized_product = _finalize_product(normalized_product)
         if not _is_product_available(normalized_product):
             continue
         if any(
@@ -366,9 +436,11 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
         if len(available_items) >= page_size:
             break
 
+    available_items = _dedupe_products(available_items)
+
     return _cache_set(cache_key, {
         **result,
-        "items": available_items,
+        "items": available_items[:page_size],
         "total": max(result.get("total", 0), len(available_items)),
     })
 
@@ -403,10 +475,11 @@ def _legacy_category_products(category_or_type: str):
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=index < 8,
         )
+        normalized_product = _finalize_product(normalized_product)
         if not _is_product_available(normalized_product):
             continue
         available_items.append(normalized_product)
-    return available_items
+    return _dedupe_products(available_items)
 
 
 @app.post("/products/price-matches")
@@ -443,7 +516,9 @@ def get_product(product_id: str):
         product = get_web_product_by_id(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Web product expired from cache")
-        normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+        normalized_product = _finalize_product(
+            _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+        )
         if not _is_product_available(normalized_product):
             raise HTTPException(status_code=404, detail="Product is no longer available")
         return _cache_set(cache_key, normalized_product)
@@ -452,7 +527,9 @@ def get_product(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+    normalized_product = _finalize_product(
+        _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+    )
     if not _is_product_available(normalized_product):
         raise HTTPException(status_code=404, detail="Product is no longer available")
     return _cache_set(cache_key, normalized_product)
@@ -518,8 +595,9 @@ async def get_dupes(request: Request):
                 },
                 enrich_image=True,
             )
+            original = _finalize_product(original)
         else:
-            original = {
+            original = _finalize_product({
                 "id": f"{brand}-{name}".lower().replace(" ", "-"),
                 "name": name,
                 "brand": brand,
@@ -537,9 +615,9 @@ async def get_dupes(request: Request):
                 "productSize": "",
                 "skinType": "",
                 "raw": {},
-            }
+            })
 
-        if not _is_product_available(original):
+        if not original or not _is_product_available(original):
             raise HTTPException(status_code=404, detail="Product is no longer available")
 
         output = []
@@ -556,7 +634,8 @@ async def get_dupes(request: Request):
                 },
                 enrich_image=True,
             )
-            if not _is_product_available(dupe):
+            dupe = _finalize_product(dupe)
+            if not dupe or not _is_product_available(dupe):
                 continue
             savings = max(original["price"] - dupe["price"], 0)
             similarity = _compute_match_percentage(
@@ -578,7 +657,19 @@ async def get_dupes(request: Request):
                 "matchReason": match_reason,
                 "savings": savings,
             })
-        output.sort(
+        output = [
+            item for item in output
+            if _product_identity_key(item["original"]) != _product_identity_key(item["dupe"])
+        ]
+        deduped_output = []
+        seen_output = set()
+        for item in output:
+            key = _product_identity_key(item["dupe"])
+            if key in seen_output:
+                continue
+            seen_output.add(key)
+            deduped_output.append(item)
+        deduped_output.sort(
             key=lambda item: (
                 -item["similarity"],
                 item["savings"] <= 0,
@@ -587,7 +678,7 @@ async def get_dupes(request: Request):
                 item["dupe"]["price"],
             )
         )
-        return _cache_set(cache_key, output[:8])
+        return _cache_set(cache_key, deduped_output[:8])
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
