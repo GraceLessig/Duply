@@ -55,9 +55,46 @@ TOP_BRAND_ALIASES = {
 CATEGORY_SEARCH_TERMS = {
     "foundation": "foundation", "concealer": "concealer", "blush": "blush", "bronzer": "bronzer",
     "powder": "powder", "primer": "primer", "highlighter": "highlighter", "lipstick": "lipstick",
+    "contour": "contour", "setting spray": "setting spray", "skin tint": "skin tint",
+    "lip gloss": "lip gloss", "lip oil": "lip oil", "lip liner": "lip liner", "lip balm": "lip balm",
     "eyeshadow": "eyeshadow palette", "eyeliner": "eyeliner", "mascara": "mascara", "eyebrow": "brow makeup",
+    "brow gel": "brow gel", "brow pencil": "brow pencil", "cleanser": "cleanser", "moisturizer": "moisturizer",
+    "serum": "serum", "sunscreen": "sunscreen",
 }
-DEFAULT_AUGMENT_CATEGORIES = ["foundation", "concealer", "blush", "bronzer", "powder", "primer", "highlighter", "lipstick", "eyeshadow", "eyeliner", "mascara", "eyebrow"]
+DEFAULT_AUGMENT_CATEGORIES = [
+    "foundation", "skin tint", "concealer", "blush", "bronzer", "contour", "powder", "primer",
+    "highlighter", "setting spray", "lipstick", "lip gloss", "lip oil", "lip liner", "lip balm",
+    "eyeshadow", "eyeliner", "mascara", "eyebrow", "brow gel", "brow pencil",
+    "cleanser", "moisturizer", "serum", "sunscreen",
+]
+
+CATEGORY_QUERY_VARIANTS = {
+    "foundation": ["foundation", "liquid foundation", "powder foundation"],
+    "skin tint": ["skin tint", "tinted moisturizer", "skin tint serum"],
+    "concealer": ["concealer", "liquid concealer", "concealer stick"],
+    "blush": ["blush", "liquid blush", "powder blush", "cream blush"],
+    "bronzer": ["bronzer", "cream bronzer", "powder bronzer"],
+    "contour": ["contour", "contour stick", "contour wand"],
+    "powder": ["powder", "setting powder", "pressed powder"],
+    "primer": ["primer", "face primer", "gripping primer"],
+    "highlighter": ["highlighter", "liquid highlighter", "powder highlighter"],
+    "setting spray": ["setting spray", "makeup setting spray", "fixing spray"],
+    "lipstick": ["lipstick", "matte lipstick", "satin lipstick"],
+    "lip gloss": ["lip gloss", "plumping lip gloss"],
+    "lip oil": ["lip oil", "tinted lip oil"],
+    "lip liner": ["lip liner", "lip pencil"],
+    "lip balm": ["lip balm", "tinted lip balm"],
+    "eyeshadow": ["eyeshadow", "eyeshadow palette", "cream eyeshadow"],
+    "eyeliner": ["eyeliner", "liquid eyeliner", "gel eyeliner"],
+    "mascara": ["mascara", "volumizing mascara", "lengthening mascara"],
+    "eyebrow": ["brow makeup", "eyebrow product", "brow kit"],
+    "brow gel": ["brow gel", "eyebrow gel"],
+    "brow pencil": ["brow pencil", "eyebrow pencil"],
+    "cleanser": ["cleanser", "face cleanser"],
+    "moisturizer": ["moisturizer", "face moisturizer", "cream moisturizer"],
+    "serum": ["serum", "face serum"],
+    "sunscreen": ["sunscreen", "face sunscreen", "spf"],
+}
 
 _allowed_brands = None
 _search_cache, _image_cache, _web_product_cache, _price_match_cache, _url_status_cache = {}, {}, {}, {}, {}
@@ -500,12 +537,13 @@ def search_web_products(query, limit=12):
     return normalized_products
 
 
-def _search_brand_catalog(brand, category_or_type="", limit=12, enrich_product_info=False):
+def _search_brand_catalog(brand, category_or_type="", limit=12, enrich_product_info=False, search_term_override=""):
     display_brand = _display_brand(brand)
     if not display_brand or not _has_dataforseo_credentials():
         return []
-    query = f"{display_brand} {CATEGORY_SEARCH_TERMS.get(normalize_product_type(category_or_type), category_or_type or 'makeup')}".strip()
-    key = ("brand-catalog", normalize_text(display_brand), normalize_product_type(category_or_type), limit, enrich_product_info)
+    query_term = (search_term_override or "").strip() or CATEGORY_SEARCH_TERMS.get(normalize_product_type(category_or_type), category_or_type or "makeup")
+    query = f"{display_brand} {query_term}".strip()
+    key = ("brand-catalog", normalize_text(display_brand), normalize_product_type(category_or_type), normalize_text(query_term), limit, enrich_product_info)
     cached = _cache_get(_search_cache, key)
     if cached is not None:
         return cached
@@ -621,19 +659,52 @@ def find_price_matches(brand, product_name, limit=8):
     return offers[:limit]
 
 
+def _brand_seed_queries(brand, categories):
+    queries = [(brand, "", "makeup")]
+    seen = {("","makeup")}
+
+    for category in categories or []:
+        normalized_category = normalize_text(category)
+        variants = CATEGORY_QUERY_VARIANTS.get(normalized_category, [category])
+        for variant in variants:
+            dedupe_key = (normalized_category, normalize_text(variant))
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            queries.append((brand, category, variant))
+
+    return queries
+
+
 def augment_firestore_catalog_with_top_brands(brands=None, categories=None, per_query_limit=12):
     selected_brands = brands or list(TOP_BRANDS.values())
     selected_categories = categories or DEFAULT_AUGMENT_CATEGORIES
     all_products, seen = [], set()
+    query_total = 0
+
     for brand in selected_brands:
-        for category in selected_categories:
-            for product in _search_brand_catalog(brand, category, per_query_limit, True):
+        for _, category, query_term in _brand_seed_queries(brand, selected_categories):
+            query_total += 1
+            for product in _search_brand_catalog(
+                brand,
+                category,
+                per_query_limit,
+                True,
+                search_term_override=query_term,
+            ):
                 key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
                 if key in seen:
                     continue
                 seen.add(key)
                 all_products.append(product)
-    return {"brands": len(selected_brands), "categories": len(selected_categories), "productsFound": len(all_products), "firestore": upsert_firestore_products(all_products)}
+
+    return {
+        "brands": len(selected_brands),
+        "categories": len(selected_categories),
+        "queriesRun": query_total,
+        "productsFound": len(all_products),
+        "firestore": upsert_firestore_products(all_products),
+    }
 
 
 def get_dataforseo_status():

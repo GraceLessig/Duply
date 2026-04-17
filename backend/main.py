@@ -644,7 +644,7 @@ async def augment_top_brands(request: Request):
 
     brands = body.get("brands") or None
     categories = body.get("categories") or None
-    per_query_limit = max(1, min(int(body.get("perQueryLimit") or 12), 50))
+    per_query_limit = max(1, min(int(body.get("perQueryLimit") or 40), 100))
 
     try:
         result = augment_firestore_catalog_with_top_brands(
