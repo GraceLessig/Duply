@@ -22,11 +22,11 @@ export default function AboutScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.brandSection}>
           <Image source={require('../assets/images/duply-logo.png')} style={styles.brandLogo} contentFit="contain" />
-          <Text style={styles.brandName}>düply</Text>
+          <Image source={require('../assets/images/duply-wordmark.png')} style={styles.brandWordmark} contentFit="contain" />
           <Text style={styles.version}>Version 1.0.0</Text>
           <Text style={styles.description}>
-            Search products from your product catalog, open rich product pages,
-            compare model-ranked dupes with explainable match scores, and scan live price-match offers.
+            Search products from your product catalog, open rich product pages, compare model-ranked dupes with
+            explainable match scores, and scan live price-match offers.
           </Text>
         </View>
 
@@ -118,11 +118,10 @@ const styles = StyleSheet.create({
     height: 120,
     marginBottom: spacing.md,
   },
-  brandName: {
-    fontSize: 40,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0,
+  brandWordmark: {
+    width: 220,
+    height: 68,
+    marginBottom: spacing.xs,
   },
   version: {
     ...typography.caption,
