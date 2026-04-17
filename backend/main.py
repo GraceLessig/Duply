@@ -451,6 +451,22 @@ def _search_ready_product(record, fallback=None, enrich_image=False):
     )
 
 
+def _coerce_to_display_product(record, fallback=None, enrich_image=False):
+    fallback = fallback or {"id": record.get("firestore_id", "")}
+    normalized_product = _search_ready_product(record, fallback=fallback, enrich_image=enrich_image)
+    if not normalized_product:
+        return None
+
+    if _is_product_available(normalized_product):
+        return normalized_product
+
+    resolved_product = _resolve_live_product(normalized_product)
+    if resolved_product:
+        return _finalize_product(resolved_product, require_image=False)
+
+    return normalized_product
+
+
 def _coerce_to_search_product(record, fallback=None, enrich_image=False):
     fallback = fallback or {"id": record.get("firestore_id", "")}
     normalized_product = _search_ready_product(record, fallback=fallback, enrich_image=enrich_image)
@@ -551,7 +567,6 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
 
     seen = set()
     combined = []
-    unresolved_local_results = []
 
     # Web results are already validated against live shopping pages.
     for product in web_results:
@@ -581,46 +596,16 @@ def _search_products_once(q: str, local_limit: int, web_limit: int, max_results:
         )
         if key in seen:
             continue
-        normalized_product = _directly_available_product(
+        normalized_product = _search_ready_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
-            require_image=False,
         )
-        if normalized_product:
-            seen.add(key)
-            combined.append(normalized_product)
-        else:
-            unresolved_local_results.append(product)
+        if not normalized_product:
+            continue
+        seen.add(key)
+        combined.append(normalized_product)
         if len(combined) >= max_results:
             break
-
-    remaining_slots = max_results - len(combined)
-    if remaining_slots > 0 and unresolved_local_results:
-        shortlist_size = min(len(unresolved_local_results), max(8, min(remaining_slots * 2, 24)))
-        with ThreadPoolExecutor(max_workers=min(6, shortlist_size)) as executor:
-            futures = [
-                executor.submit(
-                    _coerce_to_search_product,
-                    product,
-                    {"id": product.get("firestore_id", "")},
-                    False,
-                )
-                for product in unresolved_local_results[:shortlist_size]
-            ]
-            for future in as_completed(futures):
-                try:
-                    normalized_product = future.result()
-                except Exception:
-                    continue
-                if not normalized_product:
-                    continue
-                identity = _product_identity_key(normalized_product)
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                combined.append(normalized_product)
-                if len(combined) >= max_results:
-                    break
 
     return _dedupe_products(combined, require_image=False)[:max_results]
 
@@ -681,7 +666,7 @@ def search_products_page(q: str, page: int = 1, page_size: int = 24, sort: str =
     if cached is not None:
         return cached
 
-    target_count = min(max(normalized_page * normalized_page_size * 3, 72), 240)
+    target_count = min(max(normalized_page * normalized_page_size * 4, 240), 720)
     combined = _search_products_with_fallback(
         q,
         local_limit=target_count,
@@ -828,26 +813,26 @@ def get_product(product_id: str):
         product = get_web_product_by_id(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Web product expired from cache")
-        normalized_product = _coerce_to_live_product(
+        normalized_product = _coerce_to_display_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=True,
         )
-        if not _is_product_available(normalized_product):
-            raise HTTPException(status_code=404, detail="Product is no longer available")
+        if not normalized_product:
+            raise HTTPException(status_code=404, detail="Product not found")
         return _cache_set(cache_key, normalized_product)
 
     product = get_firestore_product_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    normalized_product = _coerce_to_live_product(
+    normalized_product = _coerce_to_display_product(
         product,
         fallback={"id": product.get("firestore_id", "")},
         enrich_image=True,
     )
-    if not _is_product_available(normalized_product):
-        raise HTTPException(status_code=404, detail="Product is no longer available")
+    if not normalized_product:
+        raise HTTPException(status_code=404, detail="Product not found")
     return _cache_set(cache_key, normalized_product)
 
 
@@ -911,7 +896,7 @@ async def get_dupes(request: Request):
                 },
                 enrich_image=True,
             )
-            original = _finalize_product(original)
+            original = _finalize_product(original, require_image=False)
         else:
             original = _finalize_product({
                 "id": f"{brand}-{name}".lower().replace(" ", "-"),
@@ -931,11 +916,11 @@ async def get_dupes(request: Request):
                 "productSize": "",
                 "skinType": "",
                 "raw": {},
-            })
-        original = _resolve_live_product(original)
+            }, require_image=False)
+        original = _resolve_live_product(original) or original
 
-        if not original or not _is_product_available(original):
-            raise HTTPException(status_code=404, detail="Product is no longer available")
+        if not original:
+            raise HTTPException(status_code=404, detail="Product not found")
 
         output = []
 
@@ -951,9 +936,9 @@ async def get_dupes(request: Request):
                 },
                 enrich_image=True,
             )
-            dupe = _finalize_product(dupe)
-            dupe = _resolve_live_product(dupe)
-            if not dupe or not _is_product_available(dupe):
+            dupe = _finalize_product(dupe, require_image=False)
+            dupe = _resolve_live_product(dupe) or dupe
+            if not dupe:
                 continue
             savings = max(original["price"] - dupe["price"], 0)
             similarity = _compute_match_percentage(

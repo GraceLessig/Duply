@@ -14,7 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import type { Dupe, Product } from '../services/api';
 import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
 
