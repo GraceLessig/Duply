@@ -13,9 +13,11 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from firestore_products import (
+    build_catalog_dedupe_key,
     build_catalog_product_id,
     get_firestore_web_cache,
     normalize_product_type,
+    normalize_catalog_price,
     normalize_text,
     set_firestore_web_cache,
     upsert_firestore_products,
@@ -387,9 +389,9 @@ def _extract_price(raw_value):
     if raw_value is None:
         return 0
     if isinstance(raw_value, (int, float)):
-        return round(float(raw_value), 2)
+        return normalize_catalog_price(raw_value)
     match = re.search(r"(\d+(?:\.\d{1,2})?)", str(raw_value).replace(",", ""))
-    return round(float(match.group(1)), 2) if match else 0
+    return normalize_catalog_price(match.group(1)) if match else 0
 
 
 def _infer_product_type(title):
@@ -725,6 +727,7 @@ def _parse_official_retailer_product_page(url, retailer):
     )
     if isinstance(image, list):
         image = image[0] if image else ""
+    image = image or _find_source_page_image(final_url)
     price = (
         offers.get("price")
         or _extract_meta_content(page_html, "product:price:amount")
@@ -915,7 +918,7 @@ def search_web_products(query, limit=12):
             product = _normalize_candidate(candidate, {})
             if not product:
                 continue
-            dedupe_key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+            dedupe_key = build_catalog_dedupe_key(product)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
@@ -964,7 +967,7 @@ def _search_brand_catalog(brand, category_or_type="", limit=12, enrich_product_i
             ]
             if not live_offer_urls and not product.get("title-href"):
                 continue
-            dedupe_key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+            dedupe_key = build_catalog_dedupe_key(product)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
@@ -988,7 +991,7 @@ def discover_live_category_products(category_or_type, limit=36):
             except Exception:
                 continue
             for product in items:
-                key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+                key = build_catalog_dedupe_key(product)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -1011,7 +1014,7 @@ def find_live_dupe_candidates(brand, product_name, product_type="", category="",
             except Exception:
                 continue
             for product in items:
-                key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+                key = build_catalog_dedupe_key(product)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -1198,7 +1201,7 @@ def augment_official_us_retailers(retailers=None, max_urls_per_retailer=0, start
                     product = None
                 if not product:
                     continue
-                key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+                key = build_catalog_dedupe_key(product)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -1238,7 +1241,7 @@ def augment_firestore_catalog_with_top_brands(brands=None, categories=None, per_
                 True,
                 search_term_override=query_term,
             ):
-                key = (normalize_text(product.get("brand")), normalize_text(product.get("product_name")))
+                key = build_catalog_dedupe_key(product)
                 if key in seen:
                     continue
                 seen.add(key)

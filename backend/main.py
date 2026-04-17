@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -9,11 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from firestore_products import (
+    build_catalog_dedupe_key,
     category_counts,
+    delete_firestore_products,
     fetch_firestore_product,
     get_firestore_status,
     get_firestore_product_by_id,
+    list_firestore_product_documents,
     list_products_by_category,
+    normalize_catalog_price,
     normalize_product_type,
     search_firestore_products,
     upsert_firestore_products,
@@ -73,11 +78,7 @@ def _normalize_number(value, default=0):
 
 
 def _normalize_price(value):
-    raw_value = str(value).strip() if value is not None else ""
-    price = _normalize_number(value, 0)
-    if price >= 1000 and re.fullmatch(r"\d+(?:\.0+)?", raw_value):
-        return round(price / 100, 2)
-    return round(price, 2)
+    return normalize_catalog_price(value)
 
 
 def _slugify(value: str) -> str:
@@ -280,11 +281,11 @@ def _product_from_record(record, fallback=None, enrich_image=False):
 
 
 def _product_identity_key(product):
-    return (
-        _normalize_text(product.get("brand")),
-        _normalize_text(product.get("name")),
-        normalize_product_type(product.get("productType") or product.get("category")),
-    )
+    return build_catalog_dedupe_key({
+        "brand": product.get("brand"),
+        "name": product.get("name"),
+        "productType": product.get("productType") or product.get("category"),
+    })
 
 
 def _finalize_product(product, require_image=True):
@@ -882,6 +883,329 @@ def _merge_price_offers(*offer_groups, brand="", name="", limit=3):
     return merged[:limit]
 
 
+def _cleanup_candidate_urls(data):
+    raw = data.get("raw", {}) if isinstance(data.get("raw"), dict) else {}
+    urls = []
+    for candidate in [
+        data.get("productUrl"),
+        data.get("title-href"),
+        raw.get("productUrl"),
+        raw.get("title-href"),
+    ]:
+        url = str(candidate or "").strip()
+        if url and is_approved_retailer_url(url):
+            urls.append(url)
+
+    for offer in (data.get("merchantOffers") or raw.get("merchantOffers") or []):
+        if not isinstance(offer, dict):
+            continue
+        url = str(offer.get("url") or "").strip()
+        if url and is_approved_retailer_url(url):
+            urls.append(url)
+
+    deduped = []
+    seen = set()
+    for url in urls:
+        key = _normalize_text(url)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(url)
+    return deduped
+
+
+def _prepare_cleanup_doc(doc):
+    data = doc.to_dict() or {}
+    raw = data.get("raw", {}) if isinstance(data.get("raw"), dict) else {}
+    brand = str(data.get("Brand") or data.get("brand") or "").strip()
+    name = str(
+        data.get("Product_Name")
+        or data.get("product_name")
+        or data.get("name")
+        or data.get("title")
+        or ""
+    ).strip()
+    category = str(data.get("Category") or data.get("category") or data.get("main_category") or "").strip()
+    product_type = normalize_product_type(
+        data.get("subcategory") or data.get("productType") or data.get("type") or category
+    )
+    merchant_offers = [
+        offer for offer in (data.get("merchantOffers") or raw.get("merchantOffers") or []) if isinstance(offer, dict)
+    ]
+    normalized_prices = [
+        normalize_catalog_price(value)
+        for value in [
+            data.get("Price_USD"),
+            data.get("price"),
+            data.get("salePrice"),
+            data.get("current_price"),
+        ]
+    ]
+    for offer in merchant_offers:
+        normalized_prices.append(normalize_catalog_price(offer.get("price")))
+
+    return {
+        "docId": doc.id,
+        "data": data,
+        "raw": raw,
+        "brand": brand,
+        "name": name,
+        "category": category or product_type,
+        "productType": product_type,
+        "image": str(data.get("image") or data.get("imageUrl") or data.get("image_link") or "").strip(),
+        "source": str(data.get("sourceProvider") or data.get("source") or "").strip(),
+        "rating": _normalize_number(data.get("Rating") or data.get("rating") or data.get("avgRating"), 0),
+        "lastSeenAt": int(_normalize_number(data.get("lastSeenAt"), 0)),
+        "lastValidatedAt": int(_normalize_number(data.get("lastValidatedAt"), 0)),
+        "merchantOffers": merchant_offers,
+        "candidateUrls": _cleanup_candidate_urls(data),
+        "priceCandidates": [price for price in normalized_prices if price > 0],
+        "dedupeKey": build_catalog_dedupe_key({
+            "brand": brand,
+            "product_name": name,
+            "type": product_type,
+        }),
+    }
+
+
+def _cleanup_doc_score(item):
+    official_domains = {"sephora.com", "ulta.com"}
+    live_domains = {
+        url.split("/")[2].lower()
+        for url in item.get("liveUrls", [])
+        if "://" in url
+    }
+    return (
+        100 if item.get("liveUrls") else 0,
+        30 if item.get("image") else 0,
+        20 if live_domains & official_domains else 0,
+        min(len(item.get("liveOfferMap", {})), 4) * 5,
+        10 if 0 < item.get("bestPrice", 0) < 500 else 0,
+        min(item.get("rating", 0), 5),
+        item.get("lastValidatedAt", 0),
+        item.get("lastSeenAt", 0),
+    )
+
+
+def _slice_cleanup_docs(docs, max_docs=0, start_after_id=""):
+    sorted_docs = sorted(docs or [], key=lambda doc: doc.id)
+    if start_after_id:
+        sorted_docs = [doc for doc in sorted_docs if doc.id > start_after_id]
+    if max_docs and max_docs > 0:
+        sorted_docs = sorted_docs[:max_docs]
+    return sorted_docs
+
+
+def cleanup_firestore_catalog(max_docs=0, start_after_id="", validate_images=True):
+    docs = _slice_cleanup_docs(
+        list_firestore_product_documents(),
+        max_docs=max_docs,
+        start_after_id=start_after_id,
+    )
+    if not docs:
+        return {
+            "scanned": 0,
+            "deleted": 0,
+            "rewritten": 0,
+            "duplicatesRemoved": 0,
+            "invalidRemoved": 0,
+            "groupsMerged": 0,
+            "nextStartAfterId": None,
+            "finished": True,
+        }
+
+    prepared = []
+    for doc in docs:
+        item = _prepare_cleanup_doc(doc)
+        if not item.get("brand") or not item.get("name") or not item.get("productType"):
+            item["invalidReason"] = "missing-core-fields"
+        prepared.append(item)
+
+    unique_urls = []
+    seen_urls = set()
+    for item in prepared:
+        for url in item.get("candidateUrls", []):
+            key = _normalize_text(url)
+            if key in seen_urls:
+                continue
+            seen_urls.add(key)
+            unique_urls.append(url)
+
+    url_status = {}
+    if unique_urls:
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            futures = {executor.submit(is_live_product_url, url): url for url in unique_urls}
+            for future in as_completed(futures):
+                url = futures[future]
+                try:
+                    url_status[url] = bool(future.result())
+                except Exception:
+                    url_status[url] = False
+
+    grouped = {}
+    invalid_doc_ids = []
+    invalid_removed = 0
+
+    for item in prepared:
+        if item.get("invalidReason"):
+            invalid_doc_ids.append(item["docId"])
+            invalid_removed += 1
+            continue
+
+        live_urls = [url for url in item.get("candidateUrls", []) if url_status.get(url)]
+        item["liveUrls"] = live_urls
+        item["liveOfferMap"] = {}
+
+        for offer in item.get("merchantOffers", []):
+            url = str(offer.get("url") or "").strip()
+            if not url or not url_status.get(url):
+                continue
+            normalized_offer = {
+                "id": offer.get("id") or f"offer-{abs(hash((item['docId'], url))) % 10**12}",
+                "retailer": offer.get("retailer") or item.get("source") or "",
+                "title": offer.get("title") or item.get("name"),
+                "price": normalize_catalog_price(offer.get("price")),
+                "url": url,
+                "image": offer.get("image") or item.get("image") or "",
+                "shipping": offer.get("shipping") or "",
+                "source": offer.get("source") or item.get("source") or "catalog",
+                "matchConfidence": int(offer.get("matchConfidence") or 100),
+            }
+            if normalized_offer["price"] > 0:
+                item["liveOfferMap"][url] = normalized_offer
+
+        if not live_urls:
+            invalid_doc_ids.append(item["docId"])
+            invalid_removed += 1
+            continue
+
+        best_price = 0
+        if item["liveOfferMap"]:
+            best_price = min(offer.get("price", 0) for offer in item["liveOfferMap"].values() if offer.get("price", 0) > 0)
+        if best_price <= 0 and item.get("priceCandidates"):
+            best_price = min(item["priceCandidates"])
+        item["bestPrice"] = best_price
+        grouped.setdefault(item["dedupeKey"], []).append(item)
+
+    rewritten_payloads = []
+    duplicate_doc_ids = []
+    merged_groups = 0
+
+    for _, group in grouped.items():
+        if not group:
+            continue
+
+        winner = sorted(group, key=_cleanup_doc_score, reverse=True)[0]
+        merged_groups += 1 if len(group) > 1 else 0
+        live_offers = []
+        seen_offer_keys = set()
+
+        for item in sorted(group, key=_cleanup_doc_score, reverse=True):
+            for offer in item.get("liveOfferMap", {}).values():
+                key = _offer_identity_key(offer)
+                if key in seen_offer_keys:
+                    continue
+                seen_offer_keys.add(key)
+                live_offers.append(offer)
+
+        canonical_url = ""
+        if winner.get("liveUrls"):
+            preferred_url = str(winner["data"].get("productUrl") or winner["raw"].get("productUrl") or "").strip()
+            canonical_url = preferred_url if preferred_url in winner["liveUrls"] else winner["liveUrls"][0]
+
+        if canonical_url and canonical_url not in {offer.get("url") for offer in live_offers}:
+            fallback_price = winner.get("bestPrice") or min(
+                [item.get("bestPrice", 0) for item in group if item.get("bestPrice", 0) > 0] or [0]
+            )
+            if fallback_price > 0:
+                live_offers.append({
+                    "id": f"offer-{abs(hash((winner['docId'], canonical_url))) % 10**12}",
+                    "retailer": winner.get("source") or "",
+                    "title": winner.get("name"),
+                    "price": fallback_price,
+                    "url": canonical_url,
+                    "image": winner.get("image") or "",
+                    "shipping": "",
+                    "source": winner.get("source") or "catalog",
+                    "matchConfidence": 100,
+                })
+
+        live_offers.sort(
+            key=lambda offer: (
+                normalize_text(offer.get("retailer")) not in {"sephora", "ulta", "ulta beauty"},
+                offer.get("price", 0) <= 0,
+                offer.get("price", 0) if offer.get("price", 0) > 0 else 10**9,
+                normalize_text(offer.get("retailer")),
+            )
+        )
+
+        price = 0
+        if live_offers:
+            if canonical_url:
+                matching_offer = next((offer for offer in live_offers if offer.get("url") == canonical_url and offer.get("price", 0) > 0), None)
+                if matching_offer:
+                    price = matching_offer["price"]
+            if price <= 0:
+                price = live_offers[0].get("price", 0)
+        if price <= 0:
+            price = winner.get("bestPrice", 0)
+        if price <= 0:
+            invalid_doc_ids.extend(item["docId"] for item in group)
+            invalid_removed += len(group)
+            continue
+
+        image = winner.get("image") or next((offer.get("image") for offer in live_offers if offer.get("image")), "")
+        if validate_images and not image and canonical_url:
+            image = find_product_image(winner.get("brand"), winner.get("name"), canonical_url)
+        if not image:
+            invalid_doc_ids.extend(item["docId"] for item in group)
+            invalid_removed += len(group)
+            continue
+
+        merged_raw = {
+            **winner.get("raw", {}),
+            "productUrl": canonical_url,
+            "merchantOffers": live_offers,
+            "availabilityStatus": "active",
+        }
+        rewritten_payloads.append({
+            "id": winner["docId"],
+            "brand": winner.get("brand"),
+            "product_name": winner.get("name"),
+            "category": winner.get("category"),
+            "type": winner.get("productType"),
+            "price": price,
+            "rating": winner.get("rating", 0),
+            "image": image,
+            "productUrl": canonical_url,
+            "source": winner.get("source") or "catalog",
+            "availabilityStatus": "active",
+            "merchantOffers": live_offers,
+            "merchantDomain": canonical_url.split("/")[2] if "://" in canonical_url else "",
+            "lastSeenAt": max(item.get("lastSeenAt", 0) for item in group) or int(time.time()),
+            "lastValidatedAt": int(time.time()),
+            "raw": merged_raw,
+        })
+
+        for item in group:
+            if item["docId"] != winner["docId"]:
+                duplicate_doc_ids.append(item["docId"])
+
+    delete_result = delete_firestore_products(invalid_doc_ids + duplicate_doc_ids)
+    rewrite_result = upsert_firestore_products(rewritten_payloads)
+
+    return {
+        "scanned": len(docs),
+        "deleted": delete_result.get("deleted", 0),
+        "rewritten": rewrite_result.get("written", 0),
+        "duplicatesRemoved": len(set(duplicate_doc_ids)),
+        "invalidRemoved": invalid_removed,
+        "groupsMerged": merged_groups,
+        "nextStartAfterId": docs[-1].id if docs else None,
+        "finished": not bool(max_docs and len(docs) >= max_docs),
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True, **get_recommendation_status()}
@@ -944,6 +1268,27 @@ async def augment_us_retailers(request: Request):
             retailers=retailers,
             max_urls_per_retailer=max_urls_per_retailer,
             start_index=start_index,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/cleanup-catalog")
+async def cleanup_catalog(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    max_docs = max(0, int(body.get("maxDocs") or 0))
+    start_after_id = str(body.get("startAfterId") or "").strip()
+    validate_images = bool(body.get("validateImages", True))
+
+    try:
+        return cleanup_firestore_catalog(
+            max_docs=max_docs,
+            start_after_id=start_after_id,
+            validate_images=validate_images,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

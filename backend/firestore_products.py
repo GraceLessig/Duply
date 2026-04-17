@@ -3,6 +3,8 @@ from pathlib import Path
 import time
 import json
 import hashlib
+import re
+import unicodedata
 from typing import Iterable
 
 try:
@@ -38,6 +40,28 @@ def _safe_int(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def canonicalize_catalog_text(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.lower().replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return " ".join(part for part in text.split() if part)
+
+
+def normalize_catalog_price(value):
+    raw_value = str(value).strip() if value is not None else ""
+    price = _safe_float(value)
+    if price <= 0:
+        return 0.0
+    if raw_value and raw_value.count(".") > 1:
+        return 0.0
+    if price >= 1000:
+        normalized = price / 100.0
+        if 0 < normalized < price:
+            price = normalized
+    return round(price, 2)
 
 
 def _init_firestore():
@@ -206,6 +230,16 @@ def build_catalog_product_id(product):
         f"{normalize_text(brand)}|{normalize_text(name)}|{product_type}".encode("utf-8")
     ).hexdigest()[:12]
     return f"prod-{_slugify(brand)}-{_slugify(name)}-{digest}"
+
+
+def build_catalog_dedupe_key(product):
+    return (
+        canonicalize_catalog_text(product.get("brand")),
+        canonicalize_catalog_text(product.get("product_name") or product.get("name")),
+        normalize_product_type(
+            product.get("subcategory") or product.get("type") or product.get("productType") or product.get("category")
+        ),
+    )
 
 
 def build_web_cache_id(cache_kind, cache_key):
@@ -533,7 +567,11 @@ def _load_metadata_products():
         if not brand and not product_name:
             continue
 
-        key = (normalize_text(brand), normalize_text(product_name))
+        key = build_catalog_dedupe_key({
+            "brand": brand,
+            "product_name": product_name,
+            "type": item.get("subcategory") or item.get("type") or item.get("category") or "",
+        })
         if key in seen:
             continue
         seen.add(key)
@@ -550,7 +588,7 @@ def _load_metadata_products():
             "category": category,
             "subcategory": product_type,
             "type": product_type,
-            "price": item.get("price") or 0,
+            "price": normalize_catalog_price(item.get("price") or 0),
             "rating": item.get("rating") or 0,
             "image": item.get("image") or item.get("image_link") or "",
             "raw": item,
@@ -704,7 +742,7 @@ def _category_matches(category_or_type):
 def _category_sort_key(product, sort_by):
     name = normalize_text(product.get("product_name"))
     brand = normalize_text(product.get("brand"))
-    price = _safe_float(product.get("price"))
+    price = normalize_catalog_price(product.get("price"))
     rating = _safe_float(product.get("rating"))
     reviews = _safe_float(product.get("noofratings"))
     popularity = reviews + (rating * 100)
@@ -777,7 +815,9 @@ def _normalize_catalog_record(data, doc_id=""):
         "category": category,
         "subcategory": product_type,
         "type": product_type,
-        "price": data.get("Price_USD") or data.get("price") or data.get("salePrice") or data.get("current_price") or 0,
+        "price": normalize_catalog_price(
+            data.get("Price_USD") or data.get("price") or data.get("salePrice") or data.get("current_price") or 0
+        ),
         "rating": data.get("Rating") or data.get("rating") or data.get("avgRating") or 0,
         "image": data.get("image") or data.get("imageUrl") or data.get("image_link") or "",
         "raw": data,
@@ -785,11 +825,7 @@ def _normalize_catalog_record(data, doc_id=""):
 
 
 def _product_identity_key(product):
-    return (
-        normalize_text(product.get("brand")),
-        normalize_text(product.get("product_name")),
-        normalize_product_type(product.get("subcategory") or product.get("type") or product.get("category")),
-    )
+    return build_catalog_dedupe_key(product)
 
 
 def _load_catalog_products(force_refresh=False):
@@ -823,13 +859,14 @@ def _load_catalog_products(force_refresh=False):
             merged.append(normalized)
             by_id[normalized["firestore_id"]] = normalized
 
-    for product in _load_metadata_products():
-        identity = _product_identity_key(product)
-        if identity in seen_identity:
-            continue
-        seen_identity.add(identity)
-        merged.append(product)
-        by_id[product["firestore_id"]] = product
+    if not merged:
+        for product in _load_metadata_products():
+            identity = _product_identity_key(product)
+            if identity in seen_identity:
+                continue
+            seen_identity.add(identity)
+            merged.append(product)
+            by_id[product["firestore_id"]] = product
 
     _catalog_products = merged
     _catalog_products_by_id = by_id
@@ -931,6 +968,38 @@ def upsert_firestore_products(products):
     batch.commit()
     invalidate_catalog_cache()
     return {"written": written, "skipped": 0, "available": True}
+
+
+def list_firestore_product_documents():
+    if db is None:
+        return []
+
+    try:
+        return list(db.collection(PRODUCTS_COLLECTION).stream())
+    except Exception:
+        return []
+
+
+def delete_firestore_products(doc_ids):
+    unique_doc_ids = [str(doc_id).strip() for doc_id in doc_ids or [] if str(doc_id).strip()]
+    if db is None:
+        return {"deleted": 0, "available": False}
+    if not unique_doc_ids:
+        return {"deleted": 0, "available": True}
+
+    deleted = 0
+    batch = db.batch()
+    for index, doc_id in enumerate(dict.fromkeys(unique_doc_ids), start=1):
+        doc_ref = db.collection(PRODUCTS_COLLECTION).document(doc_id)
+        batch.delete(doc_ref)
+        if index % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+        deleted += 1
+
+    batch.commit()
+    invalidate_catalog_cache()
+    return {"deleted": deleted, "available": True}
 
 
 def get_firestore_status():
