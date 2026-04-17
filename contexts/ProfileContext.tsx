@@ -24,7 +24,7 @@ export interface ProfileContextValue {
   resetProfile: () => void;
 }
 
-const SAVE_TIMEOUT_MS = 15000;
+const SAVE_TIMEOUT_MS = 30000;
 
 const DEFAULT_PROFILE: ProfilePreferences = {
   displayName: 'Display Name',
@@ -227,8 +227,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   const uploadProfilePhoto = useCallback(async (uri: string, mimeType?: string) => {
     const uid = user?.uid;
-    if (!uid || !firebaseStorage) {
-      setError(!uid ? 'Sign in before uploading a profile photo.' : 'Firebase Storage is not configured for uploads.');
+    const configuredBucket = firebaseStorage?.app?.options?.storageBucket;
+    if (!uid || !firebaseStorage || !configuredBucket) {
+      setError(
+        !uid
+          ? 'Sign in before uploading a profile photo.'
+          : 'Firebase Storage is not configured for uploads. Set EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET to your Firebase bucket.'
+      );
       return;
     }
 

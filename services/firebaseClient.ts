@@ -14,7 +14,7 @@ const firebaseConfig = {
     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ||
     extra.firebaseStorageBucket ||
     ((process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || extra.firebaseProjectId)
-      ? `${process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || extra.firebaseProjectId}.firebasestorage.app`
+      ? `${process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || extra.firebaseProjectId}.appspot.com`
       : undefined),
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || extra.firebaseMessagingSenderId,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || extra.firebaseAppId,
