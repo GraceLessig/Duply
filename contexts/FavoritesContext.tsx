@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useEffect, useState } from 'react';
+import { getProductByIdFromBackend } from '../services/backendApi';
 
 const STORAGE_KEY = '@duply_favorites';
 
@@ -72,6 +73,50 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       // Persist error
     }
   }, []);
+
+  useEffect(() => {
+    if (!loaded || favorites.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pruneUnavailableFavorites = async () => {
+      try {
+        const checks = await Promise.all(
+          favorites.map(async item => {
+            if ((item.kind || 'comparison') === 'comparison') {
+              const [original, dupe] = await Promise.all([
+                item.originalId ? getProductByIdFromBackend(item.originalId) : Promise.resolve(null),
+                item.dupeProductId ? getProductByIdFromBackend(item.dupeProductId) : Promise.resolve(null),
+              ]);
+              return Boolean(original && dupe);
+            }
+
+            return item.originalId ? Boolean(await getProductByIdFromBackend(item.originalId)) : true;
+          })
+        );
+
+        if (cancelled || checks.every(Boolean)) {
+          return;
+        }
+
+        setFavorites(prev => {
+          const updated = prev.filter((_, index) => checks[index]);
+          void persist(updated);
+          return updated;
+        });
+      } catch {
+        // Best-effort cleanup only.
+      }
+    };
+
+    void pruneUnavailableFavorites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [favorites, loaded, persist]);
 
   const addFavorite = useCallback((item: Omit<FavoriteItem, 'savedAt'>) => {
     setFavorites(prev => {

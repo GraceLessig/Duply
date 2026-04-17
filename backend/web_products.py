@@ -28,6 +28,34 @@ _search_cache = {}
 _image_cache = {}
 _web_product_cache = {}
 _price_match_cache = {}
+_url_status_cache = {}
+
+URL_STATUS_CACHE_TTL_SECONDS = int(os.getenv("DUPLY_URL_STATUS_CACHE_TTL_SECONDS", "21600"))
+URL_CHECK_TIMEOUT_SECONDS = int(os.getenv("DUPLY_URL_CHECK_TIMEOUT_SECONDS", "5"))
+
+DEAD_PAGE_MARKERS = [
+    "product not found",
+    "page not found",
+    "404 not found",
+    "error 404",
+    "this page cannot be found",
+    "this item is no longer available",
+    "this product is no longer available",
+    "this product is unavailable",
+    "this product has been discontinued",
+    "discontinued on our website",
+    "we could not find the page you requested",
+]
+
+LIVE_PAGE_MARKERS = [
+    "add to bag",
+    "add to cart",
+    "buy now",
+    "product details",
+    "ingredients",
+    "reviews",
+    "ratings",
+]
 
 
 def _load_allowed_brands():
@@ -147,7 +175,12 @@ def _cache_get(cache, key):
         return None
 
     cached_at, value = entry
-    ttl = WEB_IMAGE_CACHE_TTL_SECONDS if cache is _image_cache else WEB_SEARCH_CACHE_TTL_SECONDS
+    if cache is _image_cache:
+        ttl = WEB_IMAGE_CACHE_TTL_SECONDS
+    elif cache is _url_status_cache:
+        ttl = URL_STATUS_CACHE_TTL_SECONDS
+    else:
+        ttl = WEB_SEARCH_CACHE_TTL_SECONDS
     if (time.time() - cached_at) > ttl:
         cache.pop(key, None)
         return None
@@ -157,6 +190,57 @@ def _cache_get(cache, key):
 
 def _cache_set(cache, key, value):
     cache[key] = (time.time(), value)
+
+
+def _url_status_cache_key(url):
+    return ("url-status", normalize_text(url))
+
+
+def _looks_like_missing_page(page_html, final_url=""):
+    html_text = normalize_text(page_html)
+    final_url_text = normalize_text(final_url)
+
+    if any(marker in html_text for marker in LIVE_PAGE_MARKERS):
+        return False
+
+    if any(marker in html_text for marker in DEAD_PAGE_MARKERS):
+        return True
+
+    if "/404" in final_url_text or "not-found" in final_url_text or "product-not-found" in final_url_text:
+        return True
+
+    return False
+
+
+def is_live_product_url(url):
+    url = str(url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return False
+
+    cache_key = _url_status_cache_key(url)
+    cached = _cache_get(_url_status_cache, cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; Duply/1.0; +https://duply.app)",
+                "Accept": "text/html,application/xhtml+xml",
+            },
+        )
+        with urlopen(request, timeout=URL_CHECK_TIMEOUT_SECONDS) as response:
+            status = getattr(response, "status", 200) or 200
+            final_url = response.geturl()
+            page_html = response.read(120000).decode("utf-8", errors="ignore")
+    except Exception:
+        _cache_set(_url_status_cache, cache_key, False)
+        return False
+
+    is_live = status < 400 and not _looks_like_missing_page(page_html, final_url)
+    _cache_set(_url_status_cache, cache_key, is_live)
+    return is_live
 
 
 def _serpapi_get(params):
@@ -280,6 +364,9 @@ def _normalize_offer(item, brand, product_name, index):
     confidence = _title_match_confidence(title, brand, product_name)
 
     if not title or not url or price <= 0 or confidence < 45:
+        return None
+
+    if not is_live_product_url(url):
         return None
 
     raw_key = "|".join([

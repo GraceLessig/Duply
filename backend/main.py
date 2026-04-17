@@ -16,7 +16,13 @@ from firestore_products import (
     search_firestore_products,
 )
 from recommendation_system import find_dupes, get_recommendation_status, lookup_product
-from web_products import find_price_matches, find_product_image, get_web_product_by_id, search_web_products
+from web_products import (
+    find_price_matches,
+    find_product_image,
+    get_web_product_by_id,
+    is_live_product_url,
+    search_web_products,
+)
 
 app = FastAPI()
 
@@ -239,6 +245,17 @@ def _product_from_record(record, fallback=None, enrich_image=False):
     }
 
 
+def _is_product_available(product):
+    if not product:
+        return False
+
+    product_url = product.get("productUrl") or ""
+    if not product_url:
+        return True
+
+    return is_live_product_url(product_url)
+
+
 def _first_present(*values):
     for value in values:
         if value is not None and value != "":
@@ -273,7 +290,10 @@ def search_products(q: str):
         if key in seen:
             continue
         seen.add(key)
-        combined.append(_product_from_record(product, fallback={"id": product.get("firestore_id", "")}))
+        normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")})
+        if not _is_product_available(normalized_product):
+            continue
+        combined.append(normalized_product)
 
     return _cache_set(cache_key, combined[:28])
 
@@ -292,16 +312,20 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
         query=q,
         sort_by=sort,
     )
+    available_items = []
+    for index, product in enumerate(result["items"]):
+        normalized_product = _product_from_record(
+            product,
+            fallback={"id": product.get("firestore_id", "")},
+            enrich_image=index < 8,
+        )
+        if not _is_product_available(normalized_product):
+            continue
+        available_items.append(normalized_product)
+
     return _cache_set(cache_key, {
         **result,
-        "items": [
-            _product_from_record(
-                product,
-                fallback={"id": product.get("firestore_id", "")},
-                enrich_image=index < 8,
-            )
-            for index, product in enumerate(result["items"])
-        ],
+        "items": available_items,
     })
 
 
@@ -328,14 +352,17 @@ def get_categories():
 
 def _legacy_category_products(category_or_type: str):
     result = list_products_by_category(category_or_type, limit=24, page=1)
-    return [
-        _product_from_record(
+    available_items = []
+    for index, product in enumerate(result["items"]):
+        normalized_product = _product_from_record(
             product,
             fallback={"id": product.get("firestore_id", "")},
             enrich_image=index < 8,
         )
-        for index, product in enumerate(result["items"])
-    ]
+        if not _is_product_available(normalized_product):
+            continue
+        available_items.append(normalized_product)
+    return available_items
 
 
 @app.post("/products/price-matches")
@@ -372,13 +399,19 @@ def get_product(product_id: str):
         product = get_web_product_by_id(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Web product expired from cache")
-        return _cache_set(cache_key, _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True))
+        normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+        if not _is_product_available(normalized_product):
+            raise HTTPException(status_code=404, detail="Product is no longer available")
+        return _cache_set(cache_key, normalized_product)
 
     product = get_firestore_product_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return _cache_set(cache_key, _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True))
+    normalized_product = _product_from_record(product, fallback={"id": product.get("firestore_id", "")}, enrich_image=True)
+    if not _is_product_available(normalized_product):
+        raise HTTPException(status_code=404, detail="Product is no longer available")
+    return _cache_set(cache_key, normalized_product)
 
 
 @app.post("/dupes")
@@ -450,6 +483,9 @@ async def get_dupes(request: Request):
                 "raw": {},
             }
 
+        if not _is_product_available(original):
+            raise HTTPException(status_code=404, detail="Product is no longer available")
+
         output = []
 
         for i, item in enumerate(results):
@@ -464,6 +500,8 @@ async def get_dupes(request: Request):
                 },
                 enrich_image=True,
             )
+            if not _is_product_available(dupe):
+                continue
             savings = max(original["price"] - dupe["price"], 0)
             similarity = _compute_match_percentage(
                 original_firestore or original,
