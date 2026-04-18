@@ -207,7 +207,7 @@ export default function SearchCatalogScreen() {
                 viewMode === 'grid' ? styles.cardGrid : styles.cardList,
                 pressed && styles.cardPressed,
               ]}
-              onPress={() => openProductForDupes(item.id, item.name)}
+              onPress={() => openProductForDupes(item.id, item.familyName || item.name)}
             >
               {item.image ? (
                 <Image source={{ uri: item.image }} style={[styles.image, viewMode === 'grid' && styles.imageGrid]} contentFit="cover" />
@@ -218,7 +218,7 @@ export default function SearchCatalogScreen() {
               )}
               <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
                 <Text style={styles.brand}>{item.brand}</Text>
-                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.familyName || item.name}</Text>
                 <View style={[styles.metaRow, viewMode === 'grid' && styles.metaRowGrid]}>
                   <Text style={styles.type}>{item.productType}</Text>
                   <Text style={styles.price}>${item.price.toFixed(2)}</Text>

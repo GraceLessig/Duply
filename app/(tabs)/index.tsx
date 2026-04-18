@@ -176,11 +176,11 @@ export default function HomeScreen() {
                       renderItem={({ item }) => (
                         <Pressable
                           style={({ pressed }) => [styles.suggestionItem, pressed && { opacity: 0.7 }]}
-                          onPress={() => openProduct(item.id, item.name)}
+                          onPress={() => openProduct(item.id, item.familyName || item.name)}
                         >
                           <View style={styles.suggestionText}>
                             <Text style={styles.suggestionBrand}>{item.brand}</Text>
-                            <Text style={styles.suggestionName} numberOfLines={1}>{item.name}</Text>
+                            <Text style={styles.suggestionName} numberOfLines={1}>{item.familyName || item.name}</Text>
                           </View>
                         </Pressable>
                       )}
@@ -229,14 +229,14 @@ export default function HomeScreen() {
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
                 <ProductCard
-                  name={item.name}
+                  name={item.familyName || item.name}
                   brand={item.brand}
                   price={item.price}
                   image={item.image}
                   onPress={() =>
                     router.push({
                       pathname: '/productDetails',
-                      params: { id: item.id, productName: item.name },
+                      params: { id: item.id, productName: item.familyName || item.name },
                     })
                   }
                 />

@@ -119,7 +119,11 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
     if (!product?.id) return;
 
     setRecentViews(prev => {
-      const updated = [product, ...prev.filter(item => item.id !== product.id)].slice(0, 12);
+      const productKey = product.variantGroupId || product.id;
+      const updated = [
+        product,
+        ...prev.filter(item => (item.variantGroupId || item.id) !== productKey),
+      ].slice(0, 12);
       persistViews(updated);
       return updated;
     });
@@ -127,7 +131,7 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
   const removeRecentView = useCallback((productId: string) => {
     setRecentViews(prev => {
-      const updated = prev.filter(item => item.id !== productId);
+      const updated = prev.filter(item => item.id !== productId && item.variantGroupId !== productId);
       persistViews(updated);
       return updated;
     });

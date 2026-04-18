@@ -88,11 +88,11 @@ export default function SearchScreen() {
             renderItem={({ item }) => (
               <Pressable
                 style={({ pressed }) => [styles.resultItem, pressed && styles.resultItemPressed]}
-                onPress={() => openProduct(item.id, item.name)}
+                onPress={() => openProduct(item.id, item.familyName || item.name)}
               >
                 <View style={styles.resultInfo}>
                   <Text style={styles.resultBrand}>{item.brand}</Text>
-                  <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.resultName} numberOfLines={1}>{item.familyName || item.name}</Text>
                 </View>
               </Pressable>
             )}

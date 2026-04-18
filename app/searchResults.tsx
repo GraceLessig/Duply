@@ -136,7 +136,7 @@ export default function SearchResultsScreen() {
         )}
         <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
           <Text style={styles.brand}>{item.dupe.brand}</Text>
-          <Text style={styles.name} numberOfLines={2}>{item.dupe.name}</Text>
+          <Text style={styles.name} numberOfLines={2}>{item.dupe.familyName || item.dupe.name}</Text>
           <View style={styles.matchRow}>
             <View style={styles.matchBadge}>
               <Text style={styles.matchText}>{item.similarity}% match</Text>

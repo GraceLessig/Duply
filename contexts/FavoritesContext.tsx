@@ -7,6 +7,7 @@ const STORAGE_KEY = '@duply_favorites';
 export interface FavoriteItem {
   id: string;
   originalId?: string;
+  variantGroupId?: string;
   originalName: string;
   originalBrand: string;
   originalPrice: number;
@@ -52,6 +53,7 @@ function normalizeFavorite(item: any): FavoriteItem | null {
   return {
     id,
     originalId: id,
+    variantGroupId: String(item?.variantGroupId || '').trim() || undefined,
     originalName,
     originalBrand,
     originalPrice: Number(item?.originalPrice || 0),
@@ -134,7 +136,8 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   const addFavorite = useCallback((item: Omit<FavoriteItem, 'savedAt'>) => {
     setFavorites(prev => {
-      if (prev.some(favorite => favorite.id === item.id)) {
+      const itemKey = item.variantGroupId || item.id;
+      if (prev.some(favorite => (favorite.variantGroupId || favorite.id) === itemKey)) {
         return prev;
       }
       const updated = [{ ...item, savedAt: Date.now() }, ...prev];
@@ -145,7 +148,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   const removeFavorite = useCallback((id: string) => {
     setFavorites(prev => {
-      const updated = prev.filter(item => item.id !== id);
+      const updated = prev.filter(item => item.id !== id && item.variantGroupId !== id);
       void persist(updated);
       return updated;
     });
@@ -159,7 +162,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   const isFavorite = useCallback((id: string) => {
-    return favorites.some(item => item.id === id);
+    return favorites.some(item => item.id === id || item.variantGroupId === id);
   }, [favorites]);
 
   const toggleFavorite = useCallback((item: Omit<FavoriteItem, 'savedAt'>) => {

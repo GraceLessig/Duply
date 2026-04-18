@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { Category, CategoryProductsPage, Dupe, PriceOffer, Product } from './api';
+import { findFamilyVariants, groupCategoryProductsPage, groupProductsByFamily, withVariantOptions } from './productFamilies';
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -138,17 +139,7 @@ async function fetchJsonWithCache<T>(url: string, options: RequestInit | undefin
   }
 }
 
-export async function searchProductsFromBackend(query: string, options: { limit?: number } = {}): Promise<Product[]> {
-  const trimmed = query.trim().toLowerCase();
-  const params = new URLSearchParams({
-    q: query,
-    limit: String(options.limit || 8),
-  });
-  const url = `${BASE_URL}/products/search?${params.toString()}`;
-  return fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}:${options.limit || 8}`, CACHE_TTL_MS.search);
-}
-
-export async function searchProductsPageFromBackend(
+async function fetchSearchProductsPageRaw(
   query: string,
   options: { page?: number; pageSize?: number; sort?: string } = {},
 ): Promise<CategoryProductsPage> {
@@ -166,6 +157,25 @@ export async function searchProductsPageFromBackend(
     `search-page:${query.trim().toLowerCase()}:${params.toString()}`,
     CACHE_TTL_MS.categoryProducts,
   );
+}
+
+export async function searchProductsFromBackend(query: string, options: { limit?: number } = {}): Promise<Product[]> {
+  const trimmed = query.trim().toLowerCase();
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(options.limit || 8),
+  });
+  const url = `${BASE_URL}/products/search?${params.toString()}`;
+  const products = await fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}:${options.limit || 8}`, CACHE_TTL_MS.search);
+  return groupProductsByFamily(products);
+}
+
+export async function searchProductsPageFromBackend(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+): Promise<CategoryProductsPage> {
+  const page = await fetchSearchProductsPageRaw(query, options);
+  return groupCategoryProductsPage(page);
 }
 
 export async function getCategoriesFromBackend(): Promise<Category[]> {
@@ -194,16 +204,16 @@ export async function getProductsByCategoryFromBackend(
     CACHE_TTL_MS.categoryProducts
   );
   if (Array.isArray(parsed)) {
-    return {
+    return groupCategoryProductsPage({
       items: parsed,
       total: parsed.length,
       page: 1,
       pageSize: parsed.length || options.pageSize || 24,
       totalPages: 1,
-    };
+    });
   }
 
-  return parsed;
+  return groupCategoryProductsPage(parsed);
 }
 
 
@@ -227,8 +237,23 @@ export async function getProductByIdFromBackend(id: string): Promise<Product | n
   }
 
   const parsed = JSON.parse(text) as Product;
-  setCachedValue(cacheKey, parsed, CACHE_TTL_MS.product);
-  return parsed;
+  let normalized = parsed;
+
+  const variantQuery = [parsed.brand, parsed.name].filter(Boolean).join(' ').trim();
+  if (variantQuery) {
+    try {
+      const related = await fetchSearchProductsPageRaw(variantQuery, { page: 1, pageSize: 40, sort: 'popular' });
+      const siblings = findFamilyVariants(parsed, related.items);
+      if (siblings.length > 1) {
+        normalized = withVariantOptions(parsed, siblings);
+      }
+    } catch {
+      // Best-effort variant lookup only.
+    }
+  }
+
+  setCachedValue(cacheKey, normalized, CACHE_TTL_MS.product);
+  return normalized;
 }
 
 export async function findDupesFromBackend(product: Product): Promise<Dupe[]> {

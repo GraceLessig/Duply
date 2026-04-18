@@ -48,6 +48,7 @@ export default function ProductDetailsScreen() {
   const [priceOffers, setPriceOffers] = useState<PriceOffer[]>([]);
   const [priceOffersLoading, setPriceOffersLoading] = useState(false);
   const [priceOffersError, setPriceOffersError] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const {
     fromFeatured,
     id,
@@ -148,6 +149,16 @@ export default function ProductDetailsScreen() {
     };
   }, [isComparisonView, original]);
 
+  useEffect(() => {
+    if (!original?.variantOptions?.length) {
+      setSelectedVariantId('');
+      return;
+    }
+
+    const matchingVariant = original.variantOptions.find(variant => variant.id === original.id);
+    setSelectedVariantId(matchingVariant?.id || original.variantOptions[0]?.id || '');
+  }, [original]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -180,18 +191,23 @@ export default function ProductDetailsScreen() {
     );
   }
 
-  const favoriteId = original?.id || id || '';
+  const favoriteId = original?.variantGroupId || original?.id || id || '';
   const isFav = checkFavorite(favoriteId);
+  const displayName = original.familyName || original.name;
+  const selectedVariant = original.variantOptions?.find(variant => variant.id === selectedVariantId) || null;
+  const displayImage = selectedVariant?.image || original.image;
+  const displayVariantLabel = selectedVariant?.label || original.selectedVariantLabel || '';
 
   const handleToggleFavorite = () => {
     if (!original || isComparisonView) return;
     toggleFavorite({
-      id: original.id,
+      id: original.variantGroupId || original.id,
       originalId: original.id,
-      originalName: original.name,
+      variantGroupId: original.variantGroupId,
+      originalName: displayName,
       originalBrand: original.brand,
       originalPrice: original.price,
-      originalImage: original.image,
+      originalImage: displayImage,
       savings: 0,
     });
   };
@@ -259,7 +275,7 @@ export default function ProductDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{original.name}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
         {isComparisonView ? (
           <View style={styles.headerBtnSpacer} />
         ) : (
@@ -290,9 +306,9 @@ export default function ProductDetailsScreen() {
           </Animated.View>
         ) : (
           <Animated.View entering={FadeInDown.duration(500)} style={styles.productHero}>
-            {original.image ? (
-              <TouchableOpacity activeOpacity={0.9} onPress={() => openImagePreview(original.image)}>
-                <Image source={{ uri: original.image }} style={styles.heroImage} contentFit="cover" />
+            {displayImage ? (
+              <TouchableOpacity activeOpacity={0.9} onPress={() => openImagePreview(displayImage)}>
+                <Image source={{ uri: displayImage }} style={styles.heroImage} contentFit="cover" />
               </TouchableOpacity>
             ) : (
               <View style={[styles.heroImage, styles.imagePlaceholder]}>
@@ -300,8 +316,40 @@ export default function ProductDetailsScreen() {
               </View>
             )}
             <Text style={styles.heroBrand}>{original.brand}</Text>
-            <Text style={styles.heroName}>{original.name}</Text>
+            <Text style={styles.heroName}>{displayName}</Text>
+            {displayVariantLabel ? (
+              <View style={styles.variantSummaryPill}>
+                <Text style={styles.variantSummaryText}>Color: {displayVariantLabel}</Text>
+              </View>
+            ) : null}
             <Text style={styles.heroPrice}>${original.price.toFixed(2)}</Text>
+          </Animated.View>
+        )}
+
+        {!isComparisonView && (original.variantOptions?.length || 0) > 1 && (
+          <Animated.View entering={FadeInDown.delay(125).duration(400)}>
+            <Text style={styles.sectionTitle}>Color Options</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.variantOptionsRow}
+            >
+              {original.variantOptions?.map(variant => {
+                const active = variant.id === selectedVariantId;
+                return (
+                  <TouchableOpacity
+                    key={variant.id}
+                    activeOpacity={0.86}
+                    onPress={() => setSelectedVariantId(variant.id)}
+                    style={[styles.variantChip, active && styles.variantChipActive]}
+                  >
+                    <Text style={[styles.variantChipText, active && styles.variantChipTextActive]}>
+                      {variant.label || 'Standard'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </Animated.View>
         )}
 
@@ -386,7 +434,7 @@ export default function ProductDetailsScreen() {
                   <Text style={[styles.labelText, styles.originalBadgeText]}>ORIGINAL</Text>
                 </View>
                 <Text style={styles.productBrand}>{original.brand}</Text>
-                <Text style={styles.productName} numberOfLines={2}>{original.name}</Text>
+                <Text style={styles.productName} numberOfLines={2}>{original.familyName || original.name}</Text>
                 <Text style={[styles.productPrice, { color: colors.primary }]}>${original.price.toFixed(2)}</Text>
                 <Text style={styles.productLinkHint}>Tap to open product page</Text>
               </TouchableOpacity>
@@ -414,7 +462,7 @@ export default function ProductDetailsScreen() {
                     <Text style={[styles.labelText, styles.dupeBadgeText]}>DUPE</Text>
                   </View>
                   <Text style={styles.productBrand}>{dupeProduct.brand}</Text>
-                  <Text style={styles.productName} numberOfLines={2}>{dupeProduct.name}</Text>
+                  <Text style={styles.productName} numberOfLines={2}>{dupeProduct.familyName || dupeProduct.name}</Text>
                   <Text style={[styles.productPrice, { color: colors.success }]}>${dupeProduct.price.toFixed(2)}</Text>
                   <Text style={styles.productLinkHint}>Tap to open product page</Text>
                 </TouchableOpacity>
@@ -612,6 +660,41 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.primary,
     marginTop: spacing.sm,
+  },
+  variantSummaryPill: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.cream,
+  },
+  variantSummaryText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
+  variantOptionsRow: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  variantChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  variantChipActive: {
+    backgroundColor: colors.primary,
+  },
+  variantChipText: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  variantChipTextActive: {
+    color: colors.textOnPrimary,
   },
   matchBanner: {
     backgroundColor: colors.accentLight,

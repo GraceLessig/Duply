@@ -21,11 +21,22 @@ export interface Product {
   releaseYear?: number;
   tags?: string[];
   colors?: ProductColor[];
+  familyName?: string;
+  variantGroupId?: string;
+  selectedVariantLabel?: string;
+  variantOptions?: ProductVariantOption[];
 }
 
 export interface ProductColor {
   name: string;
   hex: string;
+}
+
+export interface ProductVariantOption {
+  id: string;
+  label: string;
+  image: string;
+  price: number;
 }
 
 export interface PriceOffer {
