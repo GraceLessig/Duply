@@ -3,6 +3,7 @@ import type { Category, CategoryProductsPage, Dupe, Product } from '../services/
 import {
   dataService,
   getCachedCategoryPage,
+  getCachedSearchResults,
   getCachedSearchProductsPage,
   prefetchProductsById,
   prefetchSearchProductsPage,
@@ -142,6 +143,23 @@ export function useSearch() {
       setLoading(false);
       setError(null);
       return;
+    }
+
+    const cachedBackendResults = getCachedSearchResults(trimmedQuery, 8);
+    if (cachedBackendResults?.length) {
+      cacheRef.current.set(normalizedQuery, cachedBackendResults);
+      setResults(cachedBackendResults);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    const cachedPage = getCachedSearchProductsPage(trimmedQuery, { page: 1, pageSize: 18, sort: 'popular' });
+    if (cachedPage?.items?.length) {
+      const seededResults = cachedPage.items.slice(0, 8);
+      cacheRef.current.set(normalizedQuery, seededResults);
+      setResults(seededResults);
+      setError(null);
     }
 
     setLoading(true);

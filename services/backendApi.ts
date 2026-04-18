@@ -141,6 +141,10 @@ export function getCachedSearchProductsPage(
   return getCachedPage<CategoryProductsPage>(buildSearchPageCacheKey(query, options));
 }
 
+export function getCachedSearchResults(query: string, limit = 8) {
+  return getCachedValue<Product[]>(`search:${query.trim().toLowerCase()}:${limit}`);
+}
+
 export function getCachedProductById(id: string) {
   return getCachedValue<Product | null>(`product:${id}`);
 }
@@ -291,7 +295,9 @@ export async function searchProductsFromBackend(query: string, options: { limit?
   });
   const url = `${BASE_URL}/products/search?${params.toString()}`;
   const products = await fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}:${options.limit || 8}`, CACHE_TTL_MS.search);
-  return groupProductsByFamily(products);
+  const grouped = groupProductsByFamily(products);
+  seedProductsCache(grouped);
+  return grouped;
 }
 
 export async function searchProductsPageFromBackend(
@@ -354,36 +360,51 @@ export async function getProductByIdFromBackend(id: string): Promise<Product | n
     return cached;
   }
 
-  const response = await fetch(`${BASE_URL}/products/${encodeURIComponent(id)}`);
-  if (response.status === 404) {
-    setCachedValue(cacheKey, null, CACHE_TTL_MS.product);
-    return null;
+  const inflight = inflightRequests.get(cacheKey);
+  if (inflight) {
+    return inflight as Promise<Product | null>;
   }
 
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Backend error ${response.status}: ${text}`);
-  }
-
-  const parsed = JSON.parse(text) as Product;
-  let normalized = parsed;
-
-  const variantQuery = [parsed.brand, parsed.name].filter(Boolean).join(' ').trim();
-  if (variantQuery) {
-    try {
-      const related = await fetchSearchProductsPageRaw(variantQuery, { page: 1, pageSize: 40, sort: 'popular' });
-      const siblings = findFamilyVariants(parsed, related.items);
-      if (siblings.length > 1) {
-        normalized = withVariantOptions(parsed, siblings);
-      }
-    } catch {
-      // Best-effort variant lookup only.
+  const request = (async () => {
+    const response = await fetch(`${BASE_URL}/products/${encodeURIComponent(id)}`);
+    if (response.status === 404) {
+      setCachedValue(cacheKey, null, CACHE_TTL_MS.product);
+      return null;
     }
-  }
 
-  seedProductFamilyCaches(normalized);
-  return normalized;
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`Backend error ${response.status}: ${text}`);
+    }
+
+    const parsed = JSON.parse(text) as Product;
+    let normalized = parsed;
+
+    const variantQuery = [parsed.brand, parsed.name].filter(Boolean).join(' ').trim();
+    if (variantQuery) {
+      try {
+        const related = await fetchSearchProductsPageRaw(variantQuery, { page: 1, pageSize: 40, sort: 'popular' });
+        const siblings = findFamilyVariants(parsed, related.items);
+        if (siblings.length > 1) {
+          normalized = withVariantOptions(parsed, siblings);
+        }
+      } catch {
+        // Best-effort variant lookup only.
+      }
+    }
+
+    seedProductFamilyCaches(normalized);
+    return normalized;
+  })();
+
+  inflightRequests.set(cacheKey, request);
+
+  try {
+    return await request;
+  } finally {
+    inflightRequests.delete(cacheKey);
+  }
 }
 
 export async function findDupesFromBackend(product: Product): Promise<Dupe[]> {

@@ -114,7 +114,7 @@ export default function SearchCatalogScreen() {
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={runSearch}
-          placeholder="Search valid products..."
+          placeholder="Search catalog products..."
           placeholderTextColor={colors.textMuted}
           style={styles.searchInput}
           returnKeyType="search"

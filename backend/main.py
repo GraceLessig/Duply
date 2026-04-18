@@ -334,18 +334,7 @@ def _build_match_reason(original_source, dupe_source):
         reasons.append("similar rating")
 
     if not reasons:
-        grounded_fallback = []
-        if _normalize_text(original["product_type"]) and _normalize_text(dupe["product_type"]):
-            grounded_fallback.append("product type")
-        if original["price"] > 0 and dupe["price"] > 0:
-            grounded_fallback.append("price")
-        if original["rating"] > 0 and dupe["rating"] > 0:
-            grounded_fallback.append("rating")
-
-        if grounded_fallback:
-            return f"Matched using available {', '.join(grounded_fallback[:3])} data"
-
-        return "Matched using available product data"
+        return ""
 
     return ", ".join(reasons[:3])
 

@@ -1,85 +1,74 @@
-import type { Category, DataService, Dupe, Product, ProductColor } from './api';
-import { findDupesFromBackend, findPriceMatchesFromBackend, getCategoriesFromBackend, getProductByIdFromBackend, getProductsByCategoryFromBackend, searchProductsFromBackend, searchProductsPageFromBackend } from './backendApi';
+import type { Category, DataService, Dupe, Product } from './api';
+import {
+  findDupesFromBackend,
+  findPriceMatchesFromBackend,
+  getCategoriesFromBackend,
+  getProductByIdFromBackend,
+  getProductsByCategoryFromBackend,
+  searchProductsFromBackend,
+  searchProductsPageFromBackend,
+} from './backendApi';
 
-const BASE_URL = 'https://makeup-api.herokuapp.com/api/v1/products.json';
+const FEATURED_DUPES_TTL_MS = 5 * 60_000;
+let featuredDupesCache: { expiresAt: number; value: Dupe[] } | null = null;
 
-interface MakeupApiProduct {
-  id: number;
-  brand: string | null;
-  name: string;
-  price: string | null;
-  price_sign: string | null;
-  image_link: string;
-  product_link: string;
-  description: string | null;
-  rating: number | null;
-  category: string | null;
-  product_type: string | null;
-  tag_list: string[];
-  product_colors: { hex_value: string; colour_name: string }[];
+function sortFeaturedCandidates(products: Product[]) {
+  return products
+    .filter(product => product.price > 0 && Boolean(product.image))
+    .sort((left, right) => {
+      const leftScore = (left.rating * 100) + left.price;
+      const rightScore = (right.rating * 100) + right.price;
+      return rightScore - leftScore;
+    });
 }
 
-function transformProduct(raw: MakeupApiProduct): Product {
-  const price = parseFloat(raw.price || '0');
-  return {
-    id: String(raw.id),
-    name: raw.name || 'Unknown Product',
-    brand: capitalize(raw.brand || 'Unknown'),
-    price: isNaN(price) ? 0 : price,
-    image: raw.image_link?.startsWith('//') ? `https:${raw.image_link}` : (raw.image_link || ''),
-    rating: raw.rating ?? 0,
-    category: raw.category || raw.product_type || 'general',
-    productType: raw.product_type || 'general',
-    description: raw.description || undefined,
-    tags: raw.tag_list || [],
-    colors: raw.product_colors
-      ?.filter(c => c.hex_value)
-      .slice(0, 8)
-      .map((c): ProductColor => ({
-        name: c.colour_name || 'Shade',
-        hex: c.hex_value.startsWith('#') ? c.hex_value : `#${c.hex_value}`,
-      })),
-  };
+function pickFeaturedCandidates(products: Product[], maxCount = 6) {
+  const unique = new Map<string, Product>();
+
+  for (const product of sortFeaturedCandidates(products)) {
+    const key = product.variantGroupId || product.id;
+    if (!unique.has(key)) {
+      unique.set(key, product);
+    }
+    if (unique.size >= maxCount) {
+      break;
+    }
+  }
+
+  return [...unique.values()];
 }
 
-function capitalize(str: string): string {
-  return str
-    .split(' ')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+async function loadFeaturedDupesFromBackend(): Promise<Dupe[]> {
+  const categoryPages = await Promise.all([
+    getProductsByCategoryFromBackend('lips', { page: 1, pageSize: 12, sort: 'popular' }).catch(() => null),
+    getProductsByCategoryFromBackend('face', { page: 1, pageSize: 12, sort: 'popular' }).catch(() => null),
+    getProductsByCategoryFromBackend('eyes', { page: 1, pageSize: 12, sort: 'popular' }).catch(() => null),
+  ]);
 
-function computeSimilarity(a: Product, b: Product): number {
-  let score = 60;
-  if (a.productType === b.productType) score += 15;
-  if (a.category === b.category) score += 10;
-  const aTags = new Set(a.tags || []);
-  const bTags = new Set(b.tags || []);
-  const shared = [...aTags].filter(t => bTags.has(t)).length;
-  const total = new Set([...aTags, ...bTags]).size;
-  if (total > 0) score += Math.round((shared / total) * 15);
-  return Math.min(score, 99);
-}
+  const candidates = pickFeaturedCandidates(
+    categoryPages.flatMap(page => page?.items || []),
+    6,
+  );
 
-let productCache: Map<string, Product[]> = new Map();
+  const featured = await Promise.all(
+    candidates.map(async original => {
+      const dupes = await findDupesFromBackend(original).catch(() => []);
+      const bestDupe = dupes[0];
+      if (!bestDupe) {
+        return null;
+      }
 
-async function fetchProducts(params: Record<string, string>): Promise<Product[]> {
-  const key = JSON.stringify(params);
-  if (productCache.has(key)) return productCache.get(key)!;
+      return {
+        ...bestDupe,
+        id: `featured-${original.id}-${bestDupe.dupe.id}`,
+      } satisfies Dupe;
+    }),
+  );
 
-  const url = new URL(BASE_URL);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-
-  const raw: MakeupApiProduct[] = await res.json();
-  const products = raw
-    .filter(p => p.price && parseFloat(p.price) > 0)
-    .map(transformProduct);
-
-  productCache.set(key, products);
-  return products;
+  return featured
+    .filter((item): item is Dupe => Boolean(item))
+    .sort((left, right) => right.similarity - left.similarity || right.savings - left.savings)
+    .slice(0, 5);
 }
 
 export const makeupApiService: DataService = {
@@ -112,37 +101,15 @@ export const makeupApiService: DataService = {
   },
 
   async getFeaturedDupes(): Promise<Dupe[]> {
-    const [lipsticks, foundations, eyeshadows] = await Promise.all([
-      fetchProducts({ product_type: 'lipstick' }).catch(() => []),
-      fetchProducts({ product_type: 'foundation' }).catch(() => []),
-      fetchProducts({ product_type: 'eyeshadow' }).catch(() => []),
-    ]);
-
-    const allProducts = [...lipsticks, ...foundations, ...eyeshadows];
-    const expensive = allProducts
-      .filter(p => p.price >= 15)
-      .sort((a, b) => b.price - a.price)
-      .slice(0, 6);
-
-    const dupes: Dupe[] = [];
-    for (const original of expensive) {
-      const candidates = allProducts.filter(
-        p => p.id !== original.id && p.productType === original.productType && p.price < original.price && p.price > 0
-      );
-      if (candidates.length === 0) continue;
-      const bestDupe = candidates.reduce((best, c) => {
-        const sim = computeSimilarity(original, c);
-        return sim > computeSimilarity(original, best) ? c : best;
-      });
-      dupes.push({
-        id: `featured-${original.id}-${bestDupe.id}`,
-        original,
-        dupe: bestDupe,
-        similarity: computeSimilarity(original, bestDupe),
-        savings: Math.round((original.price - bestDupe.price) * 100) / 100,
-      });
+    if (featuredDupesCache && Date.now() < featuredDupesCache.expiresAt) {
+      return featuredDupesCache.value;
     }
 
-    return dupes.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+    const featured = await loadFeaturedDupesFromBackend();
+    featuredDupesCache = {
+      value: featured,
+      expiresAt: Date.now() + FEATURED_DUPES_TTL_MS,
+    };
+    return featured;
   },
 };

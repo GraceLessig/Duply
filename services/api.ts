@@ -96,6 +96,7 @@ export {
   getCachedCategoryPage,
   getCachedPriceMatchesForProduct,
   getCachedProductById,
+  getCachedSearchResults,
   getCachedSearchProductsPage,
   prefetchCategoryPage,
   prefetchDupesForProduct,

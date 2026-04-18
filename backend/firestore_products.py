@@ -143,6 +143,7 @@ _metadata_products = None
 _metadata_products_by_id = None
 _catalog_products = None
 _catalog_products_by_id = None
+_catalog_products_by_category = None
 _catalog_cache_loaded_at = 0.0
 _category_counts_cache = None
 
@@ -252,9 +253,10 @@ def build_web_cache_id(cache_kind, cache_key):
 
 
 def invalidate_catalog_cache():
-    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at, _category_counts_cache
+    global _catalog_products, _catalog_products_by_id, _catalog_products_by_category, _catalog_cache_loaded_at, _category_counts_cache
     _catalog_products = None
     _catalog_products_by_id = None
+    _catalog_products_by_category = None
     _catalog_cache_loaded_at = 0.0
     _category_counts_cache = None
     _search_cache.clear()
@@ -330,6 +332,26 @@ def _product_bucket(product):
             return bucket
 
     return "other"
+
+
+def _prepare_catalog_product(product):
+    normalized = dict(product or {})
+    brand = normalize_text(normalized.get("brand"))
+    name = normalize_text(normalized.get("product_name"))
+    category = normalize_text(normalized.get("category"))
+    product_type = normalize_product_type(
+        normalized.get("subcategory") or normalized.get("type") or normalized.get("category")
+    )
+    tokens = tuple(token for token in f"{brand} {name} {category} {product_type}".split() if token)
+
+    normalized["_searchBrand"] = brand
+    normalized["_searchName"] = name
+    normalized["_searchCategory"] = category
+    normalized["_searchType"] = product_type
+    normalized["_searchTokens"] = tokens
+    normalized["_bucket"] = _product_bucket(normalized)
+    normalized["_popularity"] = _safe_float(normalized.get("noofratings")) + (_safe_float(normalized.get("rating")) * 100)
+    return normalized
 
 
 def _candidate_values(record, keys):
@@ -476,9 +498,9 @@ def _dedupe_docs(docs: Iterable):
 
 
 def _product_search_score(product, normalized_query, query_tokens):
-    brand = normalize_text(product.get("brand"))
-    name = normalize_text(product.get("product_name"))
-    category = normalize_text(product.get("category"))
+    brand = product.get("_searchBrand") or normalize_text(product.get("brand"))
+    name = product.get("_searchName") or normalize_text(product.get("product_name"))
+    category = product.get("_searchCategory") or normalize_text(product.get("category"))
     haystack = f"{brand} {name} {category}".strip()
 
     if not haystack:
@@ -604,8 +626,9 @@ def _load_metadata_products():
             "image": item.get("image") or item.get("image_link") or "",
             "raw": item,
         }
-        normalized_items.append(normalized)
-        by_id[normalized["firestore_id"]] = normalized
+        prepared = _prepare_catalog_product(normalized)
+        normalized_items.append(prepared)
+        by_id[prepared["firestore_id"]] = prepared
 
     _metadata_products = normalized_items
     _metadata_products_by_id = by_id
@@ -697,10 +720,10 @@ def search_firestore_products(query, limit=20):
     if not normalized_query:
         return []
 
-    cache_key = (normalized_query, limit)
+    cache_key = ("search", normalized_query)
     cached = _search_cache_get(cache_key)
     if cached is not None:
-        return cached
+        return cached[:limit]
 
     query_tokens = [token for token in normalized_query.split() if token]
     products = _load_catalog_products()
@@ -718,14 +741,14 @@ def search_firestore_products(query, limit=20):
     scored.sort(
         key=lambda item: (
             -item[0],
-            normalize_text(item[1].get("brand")),
-            normalize_text(item[1].get("product_name")),
+            item[1].get("_searchBrand") or normalize_text(item[1].get("brand")),
+            item[1].get("_searchName") or normalize_text(item[1].get("product_name")),
         )
     )
 
-    results = [product for _, product in scored[:limit]]
+    results = [product for _, product in scored]
     _search_cache_set(cache_key, results)
-    return results
+    return results[:limit]
 
 
 def _category_matches(category_or_type):
@@ -733,30 +756,18 @@ def _category_matches(category_or_type):
     if not normalized_target:
         return []
 
-    products = _load_catalog_products()
-    matches = []
-
-    for product in products:
-        product_type = normalize_product_type(product.get("subcategory") or product.get("type"))
-        product_category = normalize_product_type(product.get("category"))
-        product_bucket = _product_bucket(product)
-        if normalized_target in CATEGORY_BUCKETS or normalized_target == "other":
-            if normalized_target != product_bucket:
-                continue
-        elif normalized_target not in {product_type, product_category}:
-            continue
-        matches.append(product)
-
-    return matches
+    _load_catalog_products()
+    return list((_catalog_products_by_category or {}).get(normalized_target, []))
 
 
 def _category_sort_key(product, sort_by):
-    name = normalize_text(product.get("product_name"))
-    brand = normalize_text(product.get("brand"))
+    name = product.get("_searchName") or normalize_text(product.get("product_name"))
+    brand = product.get("_searchBrand") or normalize_text(product.get("brand"))
     price = normalize_catalog_price(product.get("price"))
     rating = _safe_float(product.get("rating"))
-    reviews = _safe_float(product.get("noofratings"))
-    popularity = reviews + (rating * 100)
+    popularity = product.get("_popularity")
+    if popularity is None:
+        popularity = _safe_float(product.get("noofratings")) + (rating * 100)
 
     if sort_by == "priceLow":
         return (price <= 0, price, name, brand)
@@ -793,7 +804,8 @@ def category_counts():
 
     counts = {category: 0 for category in [*CATEGORY_BUCKETS.keys(), "other"]}
     for product in _load_catalog_products():
-        counts[_product_bucket(product)] = counts.get(_product_bucket(product), 0) + 1
+        bucket = product.get("_bucket") or _product_bucket(product)
+        counts[bucket] = counts.get(bucket, 0) + 1
 
     _category_counts_cache = {
         category: _rounded_category_estimate(count)
@@ -839,7 +851,7 @@ def _normalize_catalog_record(data, doc_id=""):
         data.get("subcategory") or data.get("productType") or data.get("type") or category
     )
 
-    return {
+    return _prepare_catalog_product({
         "firestore_id": doc_id or data.get("id") or build_catalog_product_id(data),
         "brand": data.get("Brand") or data.get("brand") or "",
         "product_name": (
@@ -859,7 +871,7 @@ def _normalize_catalog_record(data, doc_id=""):
         "rating": data.get("Rating") or data.get("rating") or data.get("avgRating") or 0,
         "image": data.get("image") or data.get("imageUrl") or data.get("image_link") or "",
         "raw": data,
-    }
+    })
 
 
 def _product_identity_key(product):
@@ -867,7 +879,7 @@ def _product_identity_key(product):
 
 
 def _load_catalog_products(force_refresh=False):
-    global _catalog_products, _catalog_products_by_id, _catalog_cache_loaded_at
+    global _catalog_products, _catalog_products_by_id, _catalog_products_by_category, _catalog_cache_loaded_at
 
     if (
         not force_refresh
@@ -878,6 +890,7 @@ def _load_catalog_products(force_refresh=False):
 
     merged = []
     by_id = {}
+    by_category = {}
     seen_identity = set()
 
     if db is not None:
@@ -906,8 +919,19 @@ def _load_catalog_products(force_refresh=False):
             merged.append(product)
             by_id[product["firestore_id"]] = product
 
+    for product in merged:
+        bucket = product.get("_bucket") or _product_bucket(product)
+        product_type = product.get("_searchType") or normalize_product_type(product.get("subcategory") or product.get("type"))
+        category = normalize_product_type(product.get("category"))
+
+        for key in {bucket, product_type, category}:
+            if not key:
+                continue
+            by_category.setdefault(key, []).append(product)
+
     _catalog_products = merged
     _catalog_products_by_id = by_id
+    _catalog_products_by_category = by_category
     _catalog_cache_loaded_at = time.time()
     return _catalog_products
 

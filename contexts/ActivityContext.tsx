@@ -131,6 +131,7 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
   const addRecentView = useCallback((product: Product) => {
     if (!product?.id) return;
+    seedProductCache(product);
 
     setRecentViews(prev => {
       const productKey = product.variantGroupId || product.id;

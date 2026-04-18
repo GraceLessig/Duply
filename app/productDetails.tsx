@@ -500,7 +500,11 @@ export default function ProductDetailsScreen() {
                 <View>
                   <Text style={styles.priceMatchEyebrow}>Top 3 live retailer offers</Text>
                   <Text style={styles.priceMatchTitle}>
-                    {priceOffers[0] ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}` : 'Checking retailers'}
+                    {priceOffers[0]
+                      ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}`
+                      : priceOffersLoading
+                        ? 'Scanning live retailers'
+                        : 'No live offers found'}
                   </Text>
                 </View>
                 {priceOffersLoading ? (
@@ -672,11 +676,11 @@ export default function ProductDetailsScreen() {
           </Animated.View>
         )}
 
-        {isComparisonView && (
+        {isComparisonView && matchReasonParts.length > 0 && (
           <Animated.View entering={FadeInUp.delay(400).duration(400)}>
             <Text style={styles.sectionTitle}>Why This Match?</Text>
             <View style={styles.reasonsBox}>
-              {(matchReasonParts.length > 0 ? matchReasonParts : ['Matched using available product data']).map((reason, i) => (
+              {matchReasonParts.map((reason, i) => (
                 <View key={i} style={styles.reasonRow}>
                   <View style={styles.checkCircle}>
                     <Feather name="check" size={14} color={colors.success} />
