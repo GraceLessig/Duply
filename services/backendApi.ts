@@ -17,9 +17,18 @@ const CACHE_TTL_MS = {
   priceMatches: 90_000,
 } as const;
 
+const HOSTED_BACKEND_FALLBACK_URL = 'https://duply-backend-835k.onrender.com';
+
 function sanitizeBaseUrl(value: string | undefined | null): string {
   const trimmed = (value || '').trim();
   return trimmed.replace(/\/+$/, '');
+}
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '0.0.0.0'
+    || hostname.endsWith('.local');
 }
 
 function getBackendBaseUrl(): string {
@@ -30,6 +39,14 @@ function getBackendBaseUrl(): string {
 
   if (publicEnvUrl) {
     return publicEnvUrl;
+  }
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const browserHost = window.location.hostname || '';
+    if (isLocalHostname(browserHost)) {
+      return `http://${browserHost}:8000`;
+    }
+    return HOSTED_BACKEND_FALLBACK_URL;
   }
 
   const hostUri =
