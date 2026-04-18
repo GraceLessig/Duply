@@ -51,7 +51,6 @@ function PriceMatchLoader({ showRefreshingCopy }: { showRefreshingCopy: boolean 
 
   const glowStyle = useAnimatedStyle(() => ({
     opacity: 0.45 + (pulse.value * 0.4),
-    transform: [{ scale: 0.98 + (pulse.value * 0.04) }],
   }));
 
   const stages = showRefreshingCopy

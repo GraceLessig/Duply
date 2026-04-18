@@ -40,6 +40,7 @@ function toTitleCase(value: string) {
 function stripVariantSuffix(name: string) {
   const trimmed = name.trim();
   const patterns = [
+    /\s+[|:-]\s*[a-z]?\d{2,6}\b[^|:-]{0,40}\s*$/i,
     /\s+[(-][^()]*?(shade|color|colour|tone|hue|finish|variant)[^()]*?[)\-]\s*$/i,
     /\s+[|:-]\s*[^|:-]{1,40}\s*$/i,
     /\s+\b(?:in\s+)?(?:shade|color|colour|tone|hue|finish)\b\s+.+$/i,
@@ -48,7 +49,7 @@ function stripVariantSuffix(name: string) {
 
   for (const pattern of patterns) {
     const stripped = trimmed.replace(pattern, '').trim();
-    if (stripped && stripped.length >= Math.max(6, Math.floor(trimmed.length * 0.55))) {
+    if (stripped && stripped.length >= Math.max(6, Math.floor(trimmed.length * 0.45))) {
       return stripped;
     }
   }
@@ -85,14 +86,18 @@ function extractVariantLabel(product: Product, familyName: string) {
       .replace(new RegExp(`^${escapedFamily}\\s*`, 'i'), '')
       .replace(/^[|:,\-()\s]+|[|:,\-()\s]+$/g, '')
       .trim();
-    const normalized = normalizeToken(stripped);
+    const normalizedSuffix = stripped
+      .replace(/^[a-z]?\d{2,6}\s+/i, '')
+      .trim();
+    const variantLabel = normalizedSuffix || stripped;
+    const normalized = normalizeToken(variantLabel);
     if (
-      stripped &&
-      stripped.length <= 40 &&
+      variantLabel &&
+      variantLabel.length <= 40 &&
       normalized &&
       !VARIANT_STOP_WORDS.has(normalized)
     ) {
-      return toTitleCase(stripped);
+      return toTitleCase(variantLabel);
     }
   }
 

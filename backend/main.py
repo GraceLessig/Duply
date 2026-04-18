@@ -1836,7 +1836,7 @@ def search_products_page(q: str, page: int = 1, page_size: int = 24, sort: str =
     safe_page = min(normalized_page, total_pages)
     start = (safe_page - 1) * normalized_page_size
     end = start + normalized_page_size
-    page_items = [_ensure_product_image(product) for product in combined[start:end]]
+    page_items = combined[start:end]
 
     return _cache_set(cache_key, {
         "items": page_items,
