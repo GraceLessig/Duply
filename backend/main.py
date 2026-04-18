@@ -1000,6 +1000,43 @@ def _merge_price_offers(*offer_groups, brand="", name="", limit=3):
     return merged[:limit]
 
 
+def _catalog_url_fallback_offer(product, brand="", name="", fallback_url=""):
+    if not product:
+        return None
+
+    raw = (product.get("raw") or {}) if isinstance(product.get("raw"), dict) else {}
+    url = str(
+        product.get("productUrl")
+        or raw.get("productUrl")
+        or raw.get("title-href")
+        or fallback_url
+        or ""
+    ).strip()
+    if not url:
+        return None
+
+    price = _normalize_price(product.get("price"))
+    if price <= 0:
+        return None
+
+    retailer = (
+        str(product.get("source") or raw.get("source") or "").strip()
+        or (url.split("/")[2] if "://" in url else "catalog")
+    )
+
+    return {
+        "id": f"catalog-fallback-{product.get('firestore_id') or product.get('id') or abs(hash((url, price))) % 10**12}",
+        "retailer": retailer,
+        "title": str(product.get("product_name") or product.get("name") or f"{brand} {name}".strip()).strip(),
+        "price": price,
+        "url": url,
+        "image": str(product.get("image") or raw.get("image") or "").strip(),
+        "shipping": "",
+        "source": "catalog-fallback",
+        "matchConfidence": 100,
+    }
+
+
 def _cleanup_candidate_urls(data):
     raw = data.get("raw", {}) if isinstance(data.get("raw"), dict) else {}
     urls = []
@@ -1896,9 +1933,9 @@ async def get_price_matches(request: Request):
         if cached is not None:
             return cached
 
+        product = get_firestore_product_by_id(product_id) if product_id else None
         stored_offers = []
         if product_id:
-            product = get_firestore_product_by_id(product_id)
             merchant_offers = ((product or {}).get("raw") or {}).get("merchantOffers") or []
             for index, offer in enumerate(merchant_offers):
                 stored_offers.append({
@@ -1922,6 +1959,15 @@ async def get_price_matches(request: Request):
             name=name,
             limit=3,
         )
+        if not merged:
+            fallback_offer = _catalog_url_fallback_offer(
+                product,
+                brand=brand,
+                name=name,
+                fallback_url=body.get("productUrl", ""),
+            )
+            if fallback_offer:
+                merged = [fallback_offer]
         return _cache_set(cache_key, merged)
     except HTTPException:
         raise
