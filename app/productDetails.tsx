@@ -3,7 +3,16 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
@@ -20,6 +29,69 @@ import {
 } from '../services/api';
 
 const IMAGE_BLURHASH = 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH';
+
+function PriceMatchLoader({ showRefreshingCopy }: { showRefreshingCopy: boolean }) {
+  const pulse = useSharedValue(0);
+
+  React.useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 700, easing: Easing.out(Easing.ease) }),
+        withTiming(0, { duration: 700, easing: Easing.in(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [pulse]);
+
+  const scanStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -10 + (pulse.value * 28) }],
+    opacity: 0.35 + (pulse.value * 0.65),
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: 0.45 + (pulse.value * 0.4),
+    transform: [{ scale: 0.98 + (pulse.value * 0.04) }],
+  }));
+
+  const stages = showRefreshingCopy
+    ? ['Refreshing live offers', 'Ranking best retailers', 'Updating best price']
+    : ['Scanning live retailers', 'Comparing titles and prices', 'Ranking best offers'];
+
+  return (
+    <Animated.View style={[styles.priceMatchLoaderBox, glowStyle]}>
+      <View style={styles.priceMatchLoaderHeader}>
+        <View style={styles.priceMatchLoaderBadge}>
+          <Animated.View style={[styles.priceMatchLoaderDot, scanStyle]} />
+          <Text style={styles.priceMatchLoaderBadgeText}>Live scan in progress</Text>
+        </View>
+        <Text style={styles.priceMatchLoaderEta}>Usually a moment</Text>
+      </View>
+
+      <View style={styles.priceMatchStageRow}>
+        {stages.map(stage => (
+          <View key={stage} style={styles.priceMatchStagePill}>
+            <Text style={styles.priceMatchStageText}>{stage}</Text>
+          </View>
+        ))}
+      </View>
+
+      {[0, 1, 2].map(index => (
+        <View key={index} style={[styles.priceMatchSkeletonRow, index === 0 && styles.priceMatchSkeletonRowFeatured]}>
+          <View style={styles.priceMatchSkeletonInfo}>
+            <View style={[styles.priceMatchSkeletonLine, styles.priceMatchSkeletonRetailer]} />
+            <View style={[styles.priceMatchSkeletonLine, styles.priceMatchSkeletonTitle]} />
+            <View style={[styles.priceMatchSkeletonLine, styles.priceMatchSkeletonShipping]} />
+          </View>
+          <View style={styles.priceMatchSkeletonPriceWrap}>
+            <View style={[styles.priceMatchSkeletonLine, styles.priceMatchSkeletonPrice]} />
+            <View style={[styles.priceMatchSkeletonLine, styles.priceMatchSkeletonIcon]} />
+          </View>
+        </View>
+      ))}
+    </Animated.View>
+  );
+}
 
 function toTitleCase(value?: string) {
   if (!value) {
@@ -431,10 +503,21 @@ export default function ProductDetailsScreen() {
                     {priceOffers[0] ? `$${priceOffers[0].price.toFixed(2)} at ${priceOffers[0].retailer}` : 'Checking retailers'}
                   </Text>
                 </View>
-                {priceOffersLoading ? <Text style={styles.priceMatchStatus}>Live search...</Text> : null}
+                {priceOffersLoading ? (
+                  <View style={styles.priceMatchStatusPill}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.priceMatchStatus}>
+                      {priceOffers.length > 0 ? 'Refreshing live offers' : 'Scanning retailers'}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               {priceOffersError ? <Text style={styles.priceMatchError}>{priceOffersError}</Text> : null}
+
+              {priceOffersLoading && priceOffers.length === 0 ? (
+                <PriceMatchLoader showRefreshingCopy={Boolean(cachedPriceOffers?.length)} />
+              ) : null}
 
               {!priceOffersLoading && !priceOffersError && priceOffers.length === 0 ? (
                 <Text style={styles.priceMatchEmpty}>No live shopping links found right now.</Text>
@@ -886,13 +969,123 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: 2,
   },
+  priceMatchStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.accentLight,
+  },
   priceMatchStatus: {
     ...typography.smallBold,
-    color: colors.accentDark,
+    color: colors.primary,
   },
   priceMatchError: {
     ...typography.smallBold,
     color: colors.error,
+  },
+  priceMatchLoaderBox: {
+    gap: spacing.sm,
+  },
+  priceMatchLoaderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  priceMatchLoaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.cream,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    overflow: 'hidden',
+  },
+  priceMatchLoaderDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.accentDark,
+  },
+  priceMatchLoaderBadgeText: {
+    ...typography.smallBold,
+    color: colors.primary,
+  },
+  priceMatchLoaderEta: {
+    ...typography.small,
+    color: colors.textMuted,
+  },
+  priceMatchStageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  priceMatchStagePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  priceMatchStageText: {
+    ...typography.small,
+    color: colors.textSecondary,
+  },
+  priceMatchSkeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cream,
+  },
+  priceMatchSkeletonRowFeatured: {
+    borderColor: colors.primary,
+    backgroundColor: colors.accentLight,
+  },
+  priceMatchSkeletonInfo: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  priceMatchSkeletonLine: {
+    borderRadius: radius.full,
+    backgroundColor: colors.skeleton,
+  },
+  priceMatchSkeletonRetailer: {
+    width: '38%',
+    height: 12,
+  },
+  priceMatchSkeletonTitle: {
+    width: '88%',
+    height: 14,
+  },
+  priceMatchSkeletonShipping: {
+    width: '52%',
+    height: 12,
+  },
+  priceMatchSkeletonPriceWrap: {
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  priceMatchSkeletonPrice: {
+    width: 58,
+    height: 16,
+  },
+  priceMatchSkeletonIcon: {
+    width: 18,
+    height: 18,
   },
   priceMatchEmpty: {
     ...typography.caption,

@@ -117,14 +117,12 @@ function buildDupesCacheKey(product: Product) {
 
 function buildPriceMatchesCacheKey(product: Product) {
   const payload = {
-    id: product.id,
-    brand: product.brand,
-    name: product.name,
-    price: product.price,
-    image: product.image,
-    category: product.category,
-    productType: product.productType,
-    productUrl: product.productUrl,
+    variantGroupId: product.variantGroupId || '',
+    brand: (product.brand || '').trim().toLowerCase(),
+    familyName: (product.familyName || product.name || '').trim().toLowerCase(),
+    category: (product.category || '').trim().toLowerCase(),
+    productType: (product.productType || '').trim().toLowerCase(),
+    productUrl: (product.productUrl || '').trim().toLowerCase(),
   };
   return `priceMatches:${JSON.stringify(payload)}`;
 }
@@ -408,12 +406,7 @@ export async function findDupesFromBackend(product: Product): Promise<Dupe[]> {
 
 export async function findPriceMatchesFromBackend(product: Product): Promise<PriceOffer[]> {
   const cacheKey = buildPriceMatchesCacheKey(product);
-  const cached = getCachedValue<PriceOffer[]>(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  const response = await fetch(`${BASE_URL}/products/price-matches`, {
+  return fetchJsonWithCache<PriceOffer[]>(`${BASE_URL}/products/price-matches`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -428,19 +421,12 @@ export async function findPriceMatchesFromBackend(product: Product): Promise<Pri
       productType: product.productType,
       productUrl: product.productUrl,
     }),
+  }, cacheKey, CACHE_TTL_MS.priceMatches).catch(error => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Backend error 404') || message.includes('Backend error 405')) {
+      setCachedValue(cacheKey, [], CACHE_TTL_MS.priceMatches);
+      return [];
+    }
+    throw error;
   });
-
-  const text = await response.text();
-
-  if (response.status === 404 || response.status === 405) {
-    return [];
-  }
-
-  if (!response.ok) {
-    throw new Error(`Backend error ${response.status}: ${text}`);
-  }
-
-  const parsed = JSON.parse(text) as PriceOffer[];
-  setCachedValue(cacheKey, parsed, CACHE_TTL_MS.priceMatches);
-  return parsed;
 }
