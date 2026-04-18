@@ -121,9 +121,6 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.hero}>
-          <View style={styles.kicker}>
-            <Text style={styles.kickerText}>Find dupes fast</Text>
-          </View>
           <View>
             <Text style={styles.heading}>Find Your{'\n'}Perfect Dupe</Text>
           </View>
@@ -392,22 +389,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 36,
     borderBottomWidth: 2,
     borderColor: colors.primary,
-  },
-  kicker: {
-    alignSelf: 'center',
-    backgroundColor: colors.cream,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  kickerText: {
-    ...typography.smallBold,
-    color: colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0,
   },
   heading: {
     fontSize: 42,
