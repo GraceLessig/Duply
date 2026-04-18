@@ -287,6 +287,95 @@ async function fetchSearchProductsPageRaw(
   );
 }
 
+async function fetchCategoryProductsPageRaw(
+  category: string,
+  options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
+): Promise<CategoryProductsPage | Product[]> {
+  const params = new URLSearchParams({
+    page: String(options.page || 1),
+    page_size: String(options.pageSize || 24),
+    sort: options.sort || 'popular',
+  });
+  if (options.query?.trim()) {
+    params.set('q', options.query.trim());
+  }
+
+  const url = `${BASE_URL}/products/category/${encodeURIComponent(category)}?${params.toString()}`;
+  return fetchJsonWithCache<CategoryProductsPage | Product[]>(
+    url,
+    undefined,
+    buildCategoryCacheKey(category, options),
+    CACHE_TTL_MS.categoryProducts,
+  );
+}
+
+function normalizeRawCategoryPage(
+  parsed: CategoryProductsPage | Product[],
+  fallbackPage = 1,
+  fallbackPageSize = 24,
+): CategoryProductsPage {
+  if (Array.isArray(parsed)) {
+    return {
+      items: parsed,
+      total: parsed.length,
+      page: fallbackPage,
+      pageSize: parsed.length || fallbackPageSize,
+      totalPages: 1,
+    };
+  }
+
+  return parsed;
+}
+
+async function buildGroupedWindowFromRawPages(
+  fetchPage: (page: number, pageSize: number) => Promise<CategoryProductsPage>,
+  requestedPage: number,
+  requestedPageSize: number,
+): Promise<CategoryProductsPage> {
+  const targetGroupedCount = requestedPage * requestedPageSize;
+  const rawPageSize = Math.max(requestedPageSize * 4, 40);
+  const rawItems: Product[] = [];
+  let totalRawItems = 0;
+  let totalRawPages = 1;
+
+  for (let rawPage = 1; rawPage <= totalRawPages; rawPage += 1) {
+    const nextPage = await fetchPage(rawPage, rawPageSize);
+    rawItems.push(...nextPage.items);
+    totalRawItems = nextPage.total;
+    totalRawPages = nextPage.totalPages || 1;
+
+    const groupedSoFar = groupProductsByFamily(rawItems);
+    if (groupedSoFar.length >= targetGroupedCount || rawPage >= totalRawPages) {
+      const totalGroupedPages = Math.max(1, Math.ceil(groupedSoFar.length / requestedPageSize));
+      const safePage = Math.min(requestedPage, totalGroupedPages);
+      const start = (safePage - 1) * requestedPageSize;
+      const end = start + requestedPageSize;
+
+      return {
+        items: groupedSoFar.slice(start, end),
+        total: groupedSoFar.length,
+        page: safePage,
+        pageSize: requestedPageSize,
+        totalPages: totalGroupedPages,
+      };
+    }
+  }
+
+  const grouped = groupProductsByFamily(rawItems);
+  const totalGroupedPages = Math.max(1, Math.ceil(grouped.length / requestedPageSize));
+  const safePage = Math.min(requestedPage, totalGroupedPages);
+  const start = (safePage - 1) * requestedPageSize;
+  const end = start + requestedPageSize;
+
+  return {
+    items: grouped.slice(start, end),
+    total: grouped.length || totalRawItems,
+    page: safePage,
+    pageSize: requestedPageSize,
+    totalPages: totalGroupedPages,
+  };
+}
+
 export async function searchProductsFromBackend(query: string, options: { limit?: number } = {}): Promise<Product[]> {
   const trimmed = query.trim().toLowerCase();
   const params = new URLSearchParams({
@@ -304,8 +393,13 @@ export async function searchProductsPageFromBackend(
   query: string,
   options: { page?: number; pageSize?: number; sort?: string } = {},
 ): Promise<CategoryProductsPage> {
-  const page = await fetchSearchProductsPageRaw(query, options);
-  const grouped = groupCategoryProductsPage(page);
+  const requestedPage = options.page || 1;
+  const requestedPageSize = options.pageSize || 24;
+  const grouped = await buildGroupedWindowFromRawPages(
+    (page, pageSize) => fetchSearchProductsPageRaw(query, { ...options, page, pageSize }),
+    requestedPage,
+    requestedPageSize,
+  );
   seedProductsCache(grouped.items);
   return grouped;
 }
@@ -319,35 +413,16 @@ export async function getProductsByCategoryFromBackend(
   category: string,
   options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
 ): Promise<CategoryProductsPage> {
-  const params = new URLSearchParams({
-    page: String(options.page || 1),
-    page_size: String(options.pageSize || 24),
-    sort: options.sort || 'popular',
-  });
-  if (options.query?.trim()) {
-    params.set('q', options.query.trim());
-  }
-
-  const url = `${BASE_URL}/products/category/${encodeURIComponent(category)}?${params.toString()}`;
-  const parsed = await fetchJsonWithCache<CategoryProductsPage | Product[]>(
-    url,
-    undefined,
-    buildCategoryCacheKey(category, options),
-    CACHE_TTL_MS.categoryProducts
+  const requestedPage = options.page || 1;
+  const requestedPageSize = options.pageSize || 24;
+  const grouped = await buildGroupedWindowFromRawPages(
+    async (page, pageSize) => {
+      const parsed = await fetchCategoryProductsPageRaw(category, { ...options, page, pageSize });
+      return normalizeRawCategoryPage(parsed, page, pageSize);
+    },
+    requestedPage,
+    requestedPageSize,
   );
-  if (Array.isArray(parsed)) {
-    const grouped = groupCategoryProductsPage({
-      items: parsed,
-      total: parsed.length,
-      page: 1,
-      pageSize: parsed.length || options.pageSize || 24,
-      totalPages: 1,
-    });
-    seedProductsCache(grouped.items);
-    return grouped;
-  }
-
-  const grouped = groupCategoryProductsPage(parsed);
   seedProductsCache(grouped.items);
   return grouped;
 }
