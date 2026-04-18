@@ -55,6 +55,68 @@ const BASE_URL = getBackendBaseUrl();
 const responseCache = new Map<string, CacheEntry<unknown>>();
 const inflightRequests = new Map<string, Promise<unknown>>();
 
+function buildCategoryCacheKey(
+  category: string,
+  options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
+) {
+  const params = new URLSearchParams({
+    page: String(options.page || 1),
+    page_size: String(options.pageSize || 24),
+    sort: options.sort || 'popular',
+  });
+  if (options.query?.trim()) {
+    params.set('q', options.query.trim());
+  }
+  return `category:${category}:${params.toString()}`;
+}
+
+function buildSearchPageCacheKey(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+) {
+  const params = new URLSearchParams({
+    q: query,
+    page: String(options.page || 1),
+    page_size: String(options.pageSize || 24),
+    sort: options.sort || 'popular',
+  });
+  return `search-page:${query.trim().toLowerCase()}:${params.toString()}`;
+}
+
+function seedProductFamilyCaches(product: Product) {
+  if (!product?.id) return;
+  setCachedValue(`product:${product.id}`, product, CACHE_TTL_MS.product);
+  if (product.variantOptions?.length) {
+    product.variantOptions.forEach(variant => {
+      if (variant.id) {
+        setCachedValue(`product:${variant.id}`, product, CACHE_TTL_MS.product);
+      }
+    });
+  }
+}
+
+function seedProductsCache(products: Product[]) {
+  products.forEach(seedProductFamilyCaches);
+}
+
+function getCachedPage<T>(key: string) {
+  return getCachedValue<T>(key);
+}
+
+export function getCachedCategoryPage(
+  category: string,
+  options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
+) {
+  return getCachedPage<CategoryProductsPage>(buildCategoryCacheKey(category, options));
+}
+
+export function getCachedSearchProductsPage(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+) {
+  return getCachedPage<CategoryProductsPage>(buildSearchPageCacheKey(query, options));
+}
+
 function getCachedValue<T>(key: string): T | null {
   const entry = responseCache.get(key);
   if (!entry) return null;
@@ -76,7 +138,7 @@ function setCachedValue<T>(key: string, value: T, ttlMs: number) {
 
 export function seedProductCache(product: Product | null | undefined) {
   if (!product?.id) return;
-  setCachedValue(`product:${product.id}`, product, CACHE_TTL_MS.product);
+  seedProductFamilyCaches(product);
 }
 
 export async function prefetchProductById(id: string) {
@@ -102,6 +164,16 @@ export function prefetchCategoryPage(
 ) {
   if (!category) return;
   void getProductsByCategoryFromBackend(category, options).catch(() => {
+    // Best-effort cache warming only.
+  });
+}
+
+export function prefetchSearchProductsPage(
+  query: string,
+  options: { page?: number; pageSize?: number; sort?: string } = {},
+) {
+  if (!query.trim()) return;
+  void searchProductsPageFromBackend(query, options).catch(() => {
     // Best-effort cache warming only.
   });
 }
@@ -154,7 +226,7 @@ async function fetchSearchProductsPageRaw(
   return fetchJsonWithCache<CategoryProductsPage>(
     url,
     undefined,
-    `search-page:${query.trim().toLowerCase()}:${params.toString()}`,
+    buildSearchPageCacheKey(query, options),
     CACHE_TTL_MS.categoryProducts,
   );
 }
@@ -175,7 +247,9 @@ export async function searchProductsPageFromBackend(
   options: { page?: number; pageSize?: number; sort?: string } = {},
 ): Promise<CategoryProductsPage> {
   const page = await fetchSearchProductsPageRaw(query, options);
-  return groupCategoryProductsPage(page);
+  const grouped = groupCategoryProductsPage(page);
+  seedProductsCache(grouped.items);
+  return grouped;
 }
 
 export async function getCategoriesFromBackend(): Promise<Category[]> {
@@ -200,20 +274,24 @@ export async function getProductsByCategoryFromBackend(
   const parsed = await fetchJsonWithCache<CategoryProductsPage | Product[]>(
     url,
     undefined,
-    `category:${category}:${params.toString()}`,
+    buildCategoryCacheKey(category, options),
     CACHE_TTL_MS.categoryProducts
   );
   if (Array.isArray(parsed)) {
-    return groupCategoryProductsPage({
+    const grouped = groupCategoryProductsPage({
       items: parsed,
       total: parsed.length,
       page: 1,
       pageSize: parsed.length || options.pageSize || 24,
       totalPages: 1,
     });
+    seedProductsCache(grouped.items);
+    return grouped;
   }
 
-  return groupCategoryProductsPage(parsed);
+  const grouped = groupCategoryProductsPage(parsed);
+  seedProductsCache(grouped.items);
+  return grouped;
 }
 
 
@@ -252,7 +330,7 @@ export async function getProductByIdFromBackend(id: string): Promise<Product | n
     }
   }
 
-  setCachedValue(cacheKey, normalized, CACHE_TTL_MS.product);
+  seedProductFamilyCaches(normalized);
   return normalized;
 }
 

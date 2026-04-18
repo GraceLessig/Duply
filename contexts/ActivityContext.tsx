@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import type { Product } from '../services/api';
-import { getProductByIdFromBackend } from '../services/backendApi';
+import { getProductByIdFromBackend, seedProductCache } from '../services/backendApi';
 
 const SEARCHES_KEY = '@duply_recent_searches';
 const VIEWS_KEY = '@duply_recent_views';
@@ -49,21 +49,35 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
         if (viewsJson) {
           const parsedViews = JSON.parse(viewsJson) as Product[];
-          const validViews = await Promise.all(
-            parsedViews.slice(0, 12).map(async product => {
-              if (!product?.id) return null;
+          const storedViews = parsedViews
+            .filter((product): product is Product => Boolean(product?.id))
+            .slice(0, 12);
+
+          if (storedViews.length > 0) {
+            storedViews.forEach(seedProductCache);
+            setRecentViews(storedViews);
+          }
+
+          void Promise.all(
+            storedViews.map(async product => {
               try {
                 return await getProductByIdFromBackend(product.id);
               } catch {
                 return product;
               }
             })
-          );
-          const sanitizedViews = validViews.filter((product): product is Product => Boolean(product));
-          setRecentViews(sanitizedViews);
-          if (sanitizedViews.length !== parsedViews.length) {
-            void AsyncStorage.setItem(VIEWS_KEY, JSON.stringify(sanitizedViews));
-          }
+          ).then(validViews => {
+            const sanitizedViews = validViews.filter((product): product is Product => Boolean(product));
+            setRecentViews(prev => {
+              const nextViews = sanitizedViews.length > 0 ? sanitizedViews : prev;
+              if (JSON.stringify(nextViews) !== JSON.stringify(prev)) {
+                void AsyncStorage.setItem(VIEWS_KEY, JSON.stringify(nextViews));
+              }
+              return nextViews;
+            });
+          }).catch(() => {
+            // Best-effort refresh only.
+          });
         }
       } catch {
         // Storage unavailable

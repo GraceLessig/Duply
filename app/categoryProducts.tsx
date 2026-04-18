@@ -1,14 +1,14 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowDown, ArrowLeft, Search, Star } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductsByCategory } from '../hooks/useProducts';
 import type { Product } from '../services/api';
-import { dataService, prefetchProductsById, seedProductCache } from '../services/api';
+import { prefetchCategoryPage, prefetchProductsById, seedProductCache } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
 const DEFAULT_PAGE_SIZE = 12;
@@ -39,6 +39,7 @@ export default function CategoryProductsScreen() {
   const totalPages = data?.totalPages || 1;
   const isInitialLoading = loading && products.length === 0;
   const isRefreshingResults = loading && products.length > 0;
+  const isPageTransitionLoading = isRefreshingResults && data?.page !== page;
 
   useEffect(() => {
     setPage(1);
@@ -60,15 +61,11 @@ export default function CategoryProductsScreen() {
       return;
     }
 
-    void dataService.getProductsByCategory(category, {
+    prefetchCategoryPage(category, {
       page: page + 1,
       pageSize,
       query,
       sort: sortBy,
-    }).then(nextPage => {
-      prefetchProductsById(nextPage.items.slice(0, 8).map(product => product.id));
-    }).catch(() => {
-      // Best-effort next-page warmup only.
     });
   }, [category, data, page, pageSize, query, sortBy, totalPages]);
 
@@ -83,6 +80,10 @@ export default function CategoryProductsScreen() {
     });
   };
 
+  const subtitle = loading && products.length > 0
+    ? `Updating page ${page}...`
+    : `${totalProducts} products • page ${Math.min(page, totalPages)} of ${totalPages}`;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -91,11 +92,7 @@ export default function CategoryProductsScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>{title}</Text>
-          {!loading && !error ? (
-            <Text style={styles.subtitle}>
-              {totalProducts} products • page {Math.min(page, totalPages)} of {totalPages}
-            </Text>
-          ) : null}
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -189,73 +186,78 @@ export default function CategoryProductsScreen() {
           <Text style={styles.stateSubtitle}>Try a different search inside this category</Text>
         </View>
       ) : (
-        <>
-          <FlatList
-            key={`category-products-${viewMode}`}
-            data={products}
-            numColumns={viewMode === 'grid' ? 2 : 1}
-            keyExtractor={item => item.id}
-            contentContainerStyle={[styles.list, viewMode === 'grid' && styles.gridList]}
-            columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              isRefreshingResults ? (
-                <View style={styles.inlineLoadingPill}>
-                  <Text style={styles.inlineLoadingText}>Loading updated products...</Text>
-                </View>
-              ) : null
-            }
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.card,
-                  viewMode === 'grid' ? styles.cardGrid : styles.cardList,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={() => openProduct(item.id, item.familyName || item.name)}
-              >
-                {item.image ? (
-                  <Image
-                    source={{ uri: item.image }}
-                    style={[styles.image, viewMode === 'grid' && styles.imageGrid]}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={[styles.image, viewMode === 'grid' && styles.imageGrid, styles.imagePlaceholder]}>
-                    <Text style={styles.placeholderText}>Image unavailable</Text>
-                  </View>
-                )}
-                <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
-                  <Text style={styles.brand}>{item.brand}</Text>
-                  <Text style={styles.name} numberOfLines={2}>{item.familyName || item.name}</Text>
-                  <View style={[styles.metaRow, viewMode === 'grid' && styles.metaRowGrid]}>
-                    <Text style={styles.type}>{item.productType}</Text>
-                    <Text style={styles.price}>${item.price.toFixed(2)}</Text>
-                  </View>
-                </View>
-              </Pressable>
-            )}
-            ListFooterComponent={
-              <View style={styles.pagination}>
-                <Pressable
-                  disabled={page <= 1}
-                  onPress={() => setPage(prev => Math.max(1, prev - 1))}
-                  style={[styles.pageButton, page <= 1 && styles.pageButtonDisabled]}
-                >
-                  <Text style={[styles.pageButtonText, page <= 1 && styles.pageButtonTextDisabled]}>Previous</Text>
-                </Pressable>
-                <Text style={styles.pageCount}>Page {page} of {totalPages}</Text>
-                <Pressable
-                  disabled={page >= totalPages}
-                  onPress={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                  style={[styles.pageButton, page >= totalPages && styles.pageButtonDisabled]}
-                >
-                  <Text style={[styles.pageButtonText, page >= totalPages && styles.pageButtonTextDisabled]}>Next</Text>
-                </Pressable>
+        <FlatList
+          key={`category-products-${viewMode}`}
+          data={products}
+          numColumns={viewMode === 'grid' ? 2 : 1}
+          keyExtractor={item => item.id}
+          contentContainerStyle={[styles.list, viewMode === 'grid' && styles.gridList]}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            isRefreshingResults ? (
+              <View style={styles.inlineLoadingPill}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.inlineLoadingText}>
+                  {isPageTransitionLoading ? `Loading page ${page}...` : 'Refreshing products...'}
+                </Text>
               </View>
-            }
-          />
-        </>
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [
+                styles.card,
+                viewMode === 'grid' ? styles.cardGrid : styles.cardList,
+                pressed && styles.cardPressed,
+              ]}
+              onPress={() => openProduct(item.id, item.familyName || item.name)}
+            >
+              {item.image ? (
+                <Image
+                  source={{ uri: item.image }}
+                  style={[styles.image, viewMode === 'grid' && styles.imageGrid]}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.image, viewMode === 'grid' && styles.imageGrid, styles.imagePlaceholder]}>
+                  <Text style={styles.placeholderText}>Image unavailable</Text>
+                </View>
+              )}
+              <View style={[styles.info, viewMode === 'grid' && styles.infoGrid]}>
+                <Text style={styles.brand}>{item.brand}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.familyName || item.name}</Text>
+                <View style={[styles.metaRow, viewMode === 'grid' && styles.metaRowGrid]}>
+                  <Text style={styles.type}>{item.productType}</Text>
+                  <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+          ListFooterComponent={
+            <View style={styles.pagination}>
+              <Pressable
+                disabled={page <= 1 || loading}
+                onPress={() => setPage(prev => Math.max(1, prev - 1))}
+                style={[styles.pageButton, (page <= 1 || loading) && styles.pageButtonDisabled]}
+              >
+                <Text style={[styles.pageButtonText, (page <= 1 || loading) && styles.pageButtonTextDisabled]}>
+                  {loading ? 'Loading...' : 'Previous'}
+                </Text>
+              </Pressable>
+              <Text style={styles.pageCount}>Page {page} of {totalPages}</Text>
+              <Pressable
+                disabled={page >= totalPages || loading}
+                onPress={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                style={[styles.pageButton, (page >= totalPages || loading) && styles.pageButtonDisabled]}
+              >
+                <Text style={[styles.pageButtonText, (page >= totalPages || loading) && styles.pageButtonTextDisabled]}>
+                  {loading ? 'Loading...' : 'Next'}
+                </Text>
+              </Pressable>
+            </View>
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -402,6 +404,9 @@ const styles = StyleSheet.create({
   inlineLoadingPill: {
     alignSelf: 'center',
     marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Category, CategoryProductsPage, Dupe, Product } from '../services/api';
-import { dataService, prefetchProductsById } from '../services/api';
+import {
+  dataService,
+  getCachedCategoryPage,
+  getCachedSearchProductsPage,
+  prefetchProductsById,
+  prefetchSearchProductsPage,
+} from '../services/api';
 
 interface AsyncState<T> {
   data: T | null;
@@ -8,19 +14,28 @@ interface AsyncState<T> {
   error: string | null;
 }
 
-function useAsync<T>(fetcher: () => Promise<T>, deps: any[] = []) {
+function useAsync<T>(fetcher: () => Promise<T>, deps: any[] = [], initialData: T | null = null) {
   const [state, setState] = useState<AsyncState<T>>({
-    data: null,
+    data: initialData,
     loading: true,
     error: null,
   });
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   const depsKey = JSON.stringify(deps);
+  const initialDataRef = useRef(initialData);
+
+  useEffect(() => {
+    initialDataRef.current = initialData;
+  }, [initialData]);
 
   useEffect(() => {
     let cancelled = false;
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState(prev => ({
+      data: prev.data ?? initialDataRef.current,
+      loading: true,
+      error: null,
+    }));
     fetcherRef.current()
       .then(data => {
         if (!cancelled) setState({ data, loading: false, error: null });
@@ -46,9 +61,11 @@ export function useProductsByCategory(
   category: string,
   options: { page?: number; pageSize?: number; query?: string; sort?: string } = {},
 ) {
+  const cachedPage = getCachedCategoryPage(category, options);
   return useAsync<CategoryProductsPage>(
     () => dataService.getProductsByCategory(category, options),
     [category, options.page, options.pageSize, options.query, options.sort],
+    cachedPage,
   );
 }
 
@@ -56,6 +73,15 @@ export function useProductSearchResults(
   query: string,
   options: { page?: number; pageSize?: number; sort?: string } = {},
 ) {
+  const cachedPage = query.trim().length >= 2
+    ? getCachedSearchProductsPage(query, options)
+    : {
+        items: [],
+        total: 0,
+        page: options.page || 1,
+        pageSize: options.pageSize || 24,
+        totalPages: 1,
+      };
   return useAsync<CategoryProductsPage>(
     () => (
       query.trim().length < 2
@@ -69,6 +95,7 @@ export function useProductSearchResults(
         : dataService.searchProductsPage(query, options)
     ),
     [query, options.page, options.pageSize, options.sort],
+    cachedPage,
   );
 }
 
@@ -125,6 +152,7 @@ export function useSearch() {
         if (requestId !== requestIdRef.current) return;
 
         prefetchProductsById(data.slice(0, 4).map(product => product.id));
+        prefetchSearchProductsPage(trimmedQuery, { page: 1, pageSize: 18, sort: 'popular' });
         cacheRef.current.set(normalizedQuery, data);
         setResults(data);
         setError(null);
@@ -136,7 +164,7 @@ export function useSearch() {
           setLoading(false);
         }
       }
-    }, 180);
+    }, 120);
   }, []);
 
   return { results, loading, error, search };

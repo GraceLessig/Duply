@@ -199,10 +199,11 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <View style={styles.disclaimerCard}>
-            <Text style={styles.disclaimerTitle}>Early Demo Disclaimer</Text>
+            <Text style={styles.disclaimerTitle}>Current Known Issues</Text>
             <Text style={styles.disclaimerBody}>
-              düply is still in its early demo stage, so it does not yet include every makeup product on the market. We
-              are also actively working on adding stronger product image support.
+              Some catalog coverage is still incomplete, some product images or live retailer matches can be missing,
+              and crawl-based retailer data may lag behind the latest store inventory. Search quality and product-family
+              grouping are improving, but a few results can still feel imperfect while the catalog continues to sync.
             </Text>
           </View>
         </View>

@@ -1,14 +1,14 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowDown, ArrowLeft, Search, Star } from 'react-native-feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCardSkeleton } from '../components/SkeletonLoader';
 import { colors, radius, shadows, spacing, typography } from '../constants/theme';
 import { useProductSearchResults } from '../hooks/useProducts';
 import type { Product } from '../services/api';
-import { dataService, prefetchProductsById } from '../services/api';
+import { prefetchProductsById, prefetchSearchProductsPage } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
 const DEFAULT_PAGE_SIZE = 18;
@@ -39,6 +39,7 @@ export default function SearchCatalogScreen() {
   const totalPages = data?.totalPages || 1;
   const isInitialLoading = loading && products.length === 0;
   const isRefreshingResults = loading && products.length > 0;
+  const isPageTransitionLoading = isRefreshingResults && data?.page !== page;
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -64,14 +65,10 @@ export default function SearchCatalogScreen() {
       return;
     }
 
-    void dataService.searchProductsPage(submittedQuery, {
+    prefetchSearchProductsPage(submittedQuery, {
       page: page + 1,
       pageSize,
       sort: sortBy,
-    }).then(nextPage => {
-      prefetchProductsById(nextPage.items.slice(0, 8).map(product => product.id));
-    }).catch(() => {
-      // Best-effort next-page warmup only.
     });
   }, [data, page, pageSize, sortBy, submittedQuery, totalPages]);
 
@@ -88,6 +85,10 @@ export default function SearchCatalogScreen() {
     });
   };
 
+  const subtitle = loading && products.length > 0
+    ? `Updating page ${page}...`
+    : `${totalProducts} products • page ${Math.min(page, totalPages)} of ${totalPages}`;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -96,11 +97,7 @@ export default function SearchCatalogScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>Search Results</Text>
-          {!loading && !error ? (
-            <Text style={styles.subtitle}>
-              {totalProducts} products • page {Math.min(page, totalPages)} of {totalPages}
-            </Text>
-          ) : null}
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -229,26 +226,33 @@ export default function SearchCatalogScreen() {
           ListHeaderComponent={
             isRefreshingResults ? (
               <View style={styles.inlineLoadingPill}>
-                <Text style={styles.inlineLoadingText}>Loading updated results...</Text>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.inlineLoadingText}>
+                  {isPageTransitionLoading ? `Loading page ${page}...` : 'Refreshing results...'}
+                </Text>
               </View>
             ) : null
           }
           ListFooterComponent={
             <View style={styles.pagination}>
               <Pressable
-                disabled={page <= 1}
+                disabled={page <= 1 || loading}
                 onPress={() => setPage(prev => Math.max(1, prev - 1))}
-                style={[styles.pageButton, page <= 1 && styles.pageButtonDisabled]}
+                style={[styles.pageButton, (page <= 1 || loading) && styles.pageButtonDisabled]}
               >
-                <Text style={[styles.pageButtonText, page <= 1 && styles.pageButtonTextDisabled]}>Previous</Text>
+                <Text style={[styles.pageButtonText, (page <= 1 || loading) && styles.pageButtonTextDisabled]}>
+                  {loading ? 'Loading...' : 'Previous'}
+                </Text>
               </Pressable>
               <Text style={styles.pageCount}>Page {page} of {totalPages}</Text>
               <Pressable
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || loading}
                 onPress={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                style={[styles.pageButton, page >= totalPages && styles.pageButtonDisabled]}
+                style={[styles.pageButton, (page >= totalPages || loading) && styles.pageButtonDisabled]}
               >
-                <Text style={[styles.pageButtonText, page >= totalPages && styles.pageButtonTextDisabled]}>Next</Text>
+                <Text style={[styles.pageButtonText, (page >= totalPages || loading) && styles.pageButtonTextDisabled]}>
+                  {loading ? 'Loading...' : 'Next'}
+                </Text>
               </Pressable>
             </View>
           }
@@ -398,6 +402,9 @@ const styles = StyleSheet.create({
   inlineLoadingPill: {
     alignSelf: 'center',
     marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
