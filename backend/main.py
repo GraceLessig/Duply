@@ -1862,17 +1862,17 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
         sort_by=sort,
     )
     available_items = []
-    for index, product in enumerate(result["items"]):
-        normalized_product = _coerce_to_display_product(
+    for product in result["items"]:
+        normalized_product = _search_ready_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
-            enrich_image=index < 8,
+            enrich_image=False,
         )
         if not normalized_product:
             continue
-        available_items.append(_ensure_product_image(normalized_product))
+        available_items.append(normalized_product)
 
-    available_items = _dedupe_products(available_items)
+    available_items = _dedupe_products(available_items, require_image=False)
 
     return _cache_set(cache_key, {
         **result,
@@ -1905,16 +1905,16 @@ def get_categories():
 def _legacy_category_products(category_or_type: str):
     result = list_products_by_category(category_or_type, limit=24, page=1)
     available_items = []
-    for index, product in enumerate(result["items"]):
-        normalized_product = _coerce_to_display_product(
+    for product in result["items"]:
+        normalized_product = _search_ready_product(
             product,
             fallback={"id": product.get("firestore_id", "")},
-            enrich_image=index < 8,
+            enrich_image=False,
         )
         if not normalized_product:
             continue
-        available_items.append(_ensure_product_image(normalized_product))
-    return _dedupe_products(available_items)
+        available_items.append(normalized_product)
+    return _dedupe_products(available_items, require_image=False)
 
 
 @app.post("/products/price-matches")
