@@ -39,8 +39,8 @@ export default function HomeScreen() {
   const { recentViews, loaded: activityLoaded, addRecentSearch } = useActivity();
   const showingSuggestions = query.trim().length > 1;
   const marqueeOffset = useSharedValue(0);
-  const marqueeItemWidth = 72;
-  const marqueeRepeatCount = Math.max(6, Math.ceil(width / marqueeItemWidth) + 3);
+  const marqueeItemWidth = 120;
+  const marqueeRepeatCount = Math.max(8, Math.ceil(width / marqueeItemWidth) + 4);
   const marqueeTrackWidth = marqueeItemWidth * marqueeRepeatCount;
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="Learn more about duply"
           onPress={() => router.push('/about')}
-          style={({ pressed }) => pressed && styles.brandLogoPressed}
+          style={({ pressed }) => [styles.topSideSlot, pressed && styles.brandLogoPressed]}
         >
           <View style={styles.brandLogoFrame}>
             <Image source={require('../../assets/images/duply-logo.png')} style={styles.brandLogoImage} contentFit="contain" />
@@ -93,8 +93,10 @@ export default function HomeScreen() {
             accessibilityLabel={"d\u00fcply"}
           />
         </View>
-        <View style={styles.betaBadge}>
-          <Text style={styles.betaBadgeText}>Beta</Text>
+        <View style={[styles.topSideSlot, styles.topSideSlotRight]}>
+          <View style={styles.betaBadge}>
+            <Text style={styles.betaBadgeText}>Beta</Text>
+          </View>
         </View>
       </View>
 
@@ -270,12 +272,19 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.pink,
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
+  },
+  topSideSlot: {
+    width: 68,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  topSideSlotRight: {
+    alignItems: 'flex-end',
   },
   menuBtn: {
     padding: spacing.sm,
@@ -304,7 +313,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.96 }],
   },
   betaBadge: {
-    minWidth: 58,
+    minWidth: 60,
     height: 32,
     paddingHorizontal: spacing.md,
     borderRadius: 16,
@@ -321,24 +330,23 @@ const styles = StyleSheet.create({
   },
   brandWordmarkFrame: {
     flex: 1,
-    height: 92,
-    maxWidth: 430,
-    marginHorizontal: 2,
+    height: 104,
+    marginHorizontal: spacing.xs,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandWordmarkImage: {
-    width: 470,
-    height: 136,
-    marginLeft: -34,
-    marginTop: -12,
+    width: 540,
+    height: 172,
+    marginLeft: -10,
+    marginTop: -16,
   },
   scrollContent: {
     paddingBottom: spacing.xxxl,
   },
   marqueeBand: {
-    height: 50,
+    height: 60,
     overflow: 'hidden',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
@@ -355,16 +363,16 @@ const styles = StyleSheet.create({
     left: 0,
   },
   marqueeLogoFrame: {
-    width: 72,
-    height: 34,
+    width: 120,
+    height: 52,
     overflow: 'hidden',
     opacity: 0.42,
   },
   marqueeLogoImage: {
-    width: 156,
-    height: 50,
-    marginLeft: -42,
-    marginTop: -7,
+    width: 250,
+    height: 78,
+    marginLeft: -58,
+    marginTop: -10,
   },
   hero: {
     backgroundColor: colors.accentLight,
