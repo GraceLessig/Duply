@@ -60,9 +60,8 @@ function PriceMatchLoader({ showRefreshingCopy }: { showRefreshingCopy: boolean 
   return (
     <Animated.View style={[styles.priceMatchLoaderBox, glowStyle]}>
       <View style={styles.priceMatchLoaderHeader}>
-        <View style={styles.priceMatchLoaderBadge}>
-          <Animated.View style={[styles.priceMatchLoaderDot, scanStyle]} />
-          <Text style={styles.priceMatchLoaderBadgeText}>Live scan in progress</Text>
+        <View style={styles.priceMatchLoaderRail}>
+          <Animated.View style={[styles.priceMatchLoaderTrack, scanStyle]} />
         </View>
         <Text style={styles.priceMatchLoaderEta}>Usually a moment</Text>
       </View>
@@ -1000,27 +999,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  priceMatchLoaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+  priceMatchLoaderRail: {
+    width: 84,
+    height: 10,
     borderRadius: radius.full,
     backgroundColor: colors.cream,
     borderWidth: 1,
     borderColor: colors.primary,
     overflow: 'hidden',
   },
-  priceMatchLoaderDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  priceMatchLoaderTrack: {
+    width: 34,
+    height: '100%',
     backgroundColor: colors.accentDark,
-  },
-  priceMatchLoaderBadgeText: {
-    ...typography.smallBold,
-    color: colors.primary,
   },
   priceMatchLoaderEta: {
     ...typography.small,

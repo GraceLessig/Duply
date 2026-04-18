@@ -8,7 +8,6 @@ import Animated, {
   FadeInRight,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming,
@@ -30,29 +29,67 @@ import {
 
 const IMAGE_BLURHASH = 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH';
 
-function LoadingDot({ delay = 0 }: { delay?: number }) {
-  const bounce = useSharedValue(0);
+function DupeLoader() {
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
-    bounce.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 260, easing: Easing.out(Easing.ease) }),
-          withTiming(0, { duration: 260, easing: Easing.in(Easing.ease) })
-        ),
-        -1,
-        false
-      )
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 700, easing: Easing.out(Easing.ease) }),
+        withTiming(0, { duration: 700, easing: Easing.in(Easing.ease) }),
+      ),
+      -1,
+      false,
     );
-  }, [bounce, delay]);
+  }, [pulse]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -8 * bounce.value }],
-    opacity: 0.45 + (bounce.value * 0.55),
+  const sweepStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -18 + (pulse.value * 36) }],
+    opacity: 0.35 + (pulse.value * 0.65),
   }));
 
-  return <Animated.View style={[styles.loadingDot, animatedStyle]} />;
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: 0.42 + (pulse.value * 0.3),
+  }));
+
+  return (
+    <View style={styles.loadingExperience}>
+      <View style={styles.loadingBadge}>
+        <Animated.View style={[styles.loadingBadgeDot, sweepStyle]} />
+        <Text style={styles.loadingBadgeText}>Matching product attributes</Text>
+      </View>
+      <Text style={styles.loadingTitle}>Finding dupes</Text>
+      <Text style={styles.loadingSubtitle}>Comparing the source product against the catalog and ranking the best matches.</Text>
+      <View style={styles.loadingStageRow}>
+        {['Reading source product', 'Scoring lookalikes', 'Ranking best matches'].map(stage => (
+          <View key={stage} style={styles.loadingStagePill}>
+            <Text style={styles.loadingStageText}>{stage}</Text>
+          </View>
+        ))}
+      </View>
+      {[0, 1, 2].map(index => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.loadingCard,
+            index === 0 && styles.loadingCardFeatured,
+            shimmerStyle,
+          ]}
+        >
+          <View style={styles.loadingImage} />
+          <View style={styles.loadingInfo}>
+            <View style={[styles.loadingLine, styles.loadingBrandLine]} />
+            <View style={[styles.loadingLine, styles.loadingNameLine]} />
+            <View style={[styles.loadingLine, styles.loadingReasonLine]} />
+          </View>
+          <View style={styles.loadingPriceCol}>
+            <View style={[styles.loadingLine, styles.loadingPriceLine]} />
+            <View style={[styles.loadingLine, styles.loadingSavingsLine]} />
+          </View>
+        </Animated.View>
+      ))}
+    </View>
+  );
 }
 
 export default function SearchResultsScreen() {
@@ -228,13 +265,7 @@ export default function SearchResultsScreen() {
 
       {isInitialLoading ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingTitle}>Finding dupes</Text>
-          <Text style={styles.loadingSubtitle}>Running the selected product through the model.</Text>
-          <View style={styles.loadingDotsRow}>
-            <LoadingDot delay={0} />
-            <LoadingDot delay={120} />
-            <LoadingDot delay={240} />
-          </View>
+          <DupeLoader />
         </View>
       ) : error ? (
         <View style={styles.centerMessage}>
@@ -307,32 +338,111 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  loadingExperience: {
+    gap: spacing.md,
+  },
+  loadingBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.accentLight,
+    overflow: 'hidden',
+  },
+  loadingBadgeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.accentDark,
+  },
+  loadingBadgeText: {
+    ...typography.smallBold,
+    color: colors.primary,
   },
   loadingTitle: {
     ...typography.h3,
     color: colors.primary,
-    textAlign: 'center',
   },
   loadingSubtitle: {
     ...typography.caption,
     color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
   },
-  loadingDotsRow: {
-    alignItems: 'center',
-    marginTop: spacing.lg,
+  loadingStageRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
-  loadingDot: {
-    width: 12,
+  loadingStagePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  loadingStageText: {
+    ...typography.small,
+    color: colors.textSecondary,
+  },
+  loadingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.cream,
+  },
+  loadingCardFeatured: {
+    borderColor: colors.primary,
+    backgroundColor: colors.accentLight,
+  },
+  loadingImage: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.md,
+    backgroundColor: colors.skeleton,
+  },
+  loadingInfo: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  loadingLine: {
+    borderRadius: radius.full,
+    backgroundColor: colors.skeleton,
+  },
+  loadingBrandLine: {
+    width: '28%',
     height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.primary,
+  },
+  loadingNameLine: {
+    width: '80%',
+    height: 16,
+  },
+  loadingReasonLine: {
+    width: '62%',
+    height: 12,
+  },
+  loadingPriceCol: {
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  loadingPriceLine: {
+    width: 56,
+    height: 16,
+  },
+  loadingSavingsLine: {
+    width: 42,
+    height: 12,
   },
   viewModeWrap: {
     flexDirection: 'row',

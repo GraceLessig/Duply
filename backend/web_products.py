@@ -117,6 +117,9 @@ NON_US_COUNTRY_TLDS = {
     ".eu", ".fr", ".hk", ".ie", ".in", ".it", ".jp", ".kr", ".mx", ".nl",
     ".no", ".nz", ".pl", ".se", ".sg", ".tr", ".tw", ".uk", ".vn", ".za",
 }
+GENERIC_RETAILER_TLDS = {
+    ".com", ".us", ".net", ".org", ".shop", ".store", ".beauty", ".makeup", ".cosmetics", ".co",
+}
 OFFICIAL_US_RETAILERS = {
     "sephora": {
         "displayName": "Sephora",
@@ -276,7 +279,7 @@ def _is_us_domain(domain):
     if any(domain.endswith(tld) for tld in NON_US_COUNTRY_TLDS):
         return False
 
-    return domain.endswith(".com") or domain.endswith(".us")
+    return any(domain.endswith(tld) for tld in GENERIC_RETAILER_TLDS)
 
 
 def is_approved_retailer_url(url):
