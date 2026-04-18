@@ -37,28 +37,65 @@ function toTitleCase(value: string) {
     .join(' ');
 }
 
-function stripVariantSuffix(name: string) {
-  const trimmed = name.trim();
-  const patterns = [
-    /\s+[|:-]\s*[a-z]?\d{2,6}\b[^|:-]{0,40}\s*$/i,
-    /\s+[(-][^()]*?(shade|color|colour|tone|hue|finish|variant)[^()]*?[)\-]\s*$/i,
-    /\s+[|:-]\s*[^|:-]{1,40}\s*$/i,
-    /\s+\b(?:in\s+)?(?:shade|color|colour|tone|hue|finish)\b\s+.+$/i,
-    /\s+\b(?:mini|travel size|full size)\b\s*$/i,
-  ];
+function looksLikeVariantSuffix(value: string) {
+  const normalized = normalizeToken(value);
+  if (!normalized) {
+    return false;
+  }
 
-  for (const pattern of patterns) {
-    const stripped = trimmed.replace(pattern, '').trim();
-    if (stripped && stripped.length >= Math.max(6, Math.floor(trimmed.length * 0.45))) {
-      return stripped;
+  if (/^[a-z]?\d{2,6}(?:\s+[a-z0-9].*)?$/i.test(value.trim())) {
+    return true;
+  }
+
+  const tokenCount = normalized.split(/\s+/).length;
+  if (tokenCount <= 4 && normalized.length <= 28) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeVariantLabel(value: string) {
+  return value
+    .replace(/^[|:,\-()\s]+|[|:,\-()\s]+$/g, '')
+    .replace(/^[a-z]?\d{2,6}\s+/i, '')
+    .trim();
+}
+
+function splitTitleStem(name: string) {
+  const trimmed = name.trim();
+  const separated = trimmed.match(/^(.*?)(?:\s+(?:\||:|-)\s+)([^|:]{1,40})$/);
+  if (separated?.[1] && separated?.[2]) {
+    const stem = separated[1].trim();
+    const suffix = normalizeVariantLabel(separated[2]);
+    if (stem && looksLikeVariantSuffix(suffix) && stem.length >= Math.max(6, Math.floor(trimmed.length * 0.45))) {
+      return { stem, variantLabel: suffix };
     }
   }
 
-  return trimmed;
+  const patterns = [
+    /^(.*)\s+[|:-]\s*([a-z]?\d{2,6}\b[^|:-]{0,40})\s*$/i,
+    /^(.*)\s+[(-]([^()]*?(?:shade|color|colour|tone|hue|finish|variant)[^()]*)[)\-]\s*$/i,
+    /^(.*)\s+\b(?:in\s+)?(?:shade|color|colour|tone|hue|finish)\b\s+(.+)$/i,
+    /^(.*)\s+\b(?:mini|travel size|full size)\b\s*$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const matched = trimmed.match(pattern);
+    const stem = matched?.[1]?.trim() || '';
+    const suffix = normalizeVariantLabel((matched?.[2] || '').trim());
+    if (stem && stem.length >= Math.max(6, Math.floor(trimmed.length * 0.45))) {
+      if (!suffix || looksLikeVariantSuffix(suffix)) {
+        return { stem, variantLabel: suffix };
+      }
+    }
+  }
+
+  return { stem: trimmed, variantLabel: '' };
 }
 
 export function getProductFamilyName(product: Product) {
-  const name = stripVariantSuffix(product.name || '');
+  const name = splitTitleStem(product.name || '').stem;
   return name || product.name || '';
 }
 
@@ -72,7 +109,6 @@ function getProductFamilyKey(product: Product) {
 
 function extractVariantLabel(product: Product, familyName: string) {
   const name = (product.name || '').trim();
-  const family = familyName.trim();
   const colors = product.colors || [];
   const colorLabel = colors.find(color => color?.name && !/^shade$/i.test(color.name))?.name?.trim();
 
@@ -80,16 +116,11 @@ function extractVariantLabel(product: Product, familyName: string) {
     return colorLabel;
   }
 
-  if (name && family && name.toLowerCase() !== family.toLowerCase()) {
-    const escapedFamily = family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const stripped = name
-      .replace(new RegExp(`^${escapedFamily}\\s*`, 'i'), '')
-      .replace(/^[|:,\-()\s]+|[|:,\-()\s]+$/g, '')
-      .trim();
-    const normalizedSuffix = stripped
-      .replace(/^[a-z]?\d{2,6}\s+/i, '')
-      .trim();
-    const variantLabel = normalizedSuffix || stripped;
+  if (name && familyName && name.toLowerCase() !== familyName.toLowerCase()) {
+    const split = splitTitleStem(name);
+    const variantLabel = split.stem.toLowerCase() === familyName.trim().toLowerCase()
+      ? split.variantLabel
+      : '';
     const normalized = normalizeToken(variantLabel);
     if (
       variantLabel &&
