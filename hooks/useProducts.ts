@@ -170,7 +170,7 @@ export function useSearch() {
         if (requestId !== requestIdRef.current) return;
 
         prefetchProductsById(data.slice(0, 4).map(product => product.id));
-        prefetchSearchProductsPage(trimmedQuery, { page: 1, pageSize: 18, sort: 'popular' });
+        prefetchSearchProductsPage(trimmedQuery, { page: 1, pageSize: 10, sort: 'popular' });
         cacheRef.current.set(normalizedQuery, data);
         setResults(data);
         setError(null);

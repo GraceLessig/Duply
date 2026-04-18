@@ -11,7 +11,7 @@ import type { Product } from '../services/api';
 import { prefetchCategoryPage, prefetchProductsById, seedProductCache } from '../services/api';
 
 const EMPTY_PRODUCTS: Product[] = [];
-const DEFAULT_PAGE_SIZE = 12;
+const DEFAULT_PAGE_SIZE = 10;
 const IMAGE_BLURHASH = 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH';
 
 type SortOption = 'az' | 'priceLow' | 'priceHigh' | 'popular';
