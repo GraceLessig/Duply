@@ -21,37 +21,31 @@ const MOOD_LANES = [
   {
     id: 'lips-preview',
     title: 'Luxury Lip Alternatives',
-    subtitle: 'Fast lipstick and gloss browsing without digging through a huge list.',
     category: 'lips',
   },
   {
     id: 'face-preview',
     title: 'Face Base Refresh',
-    subtitle: 'Complexion staples and everyday face picks in one compact lane.',
     category: 'face',
   },
   {
     id: 'skincare-preview',
     title: 'Skincare Standouts',
-    subtitle: 'Routine-friendly discovery picks for quick browsing.',
     category: 'skincare',
   },
 ] as const;
 
 function SectionHeader({
   title,
-  subtitle,
   loading = false,
 }: {
   title: string;
-  subtitle: string;
   loading?: boolean;
 }) {
   return (
     <View style={styles.sectionHeaderRow}>
       <View style={styles.sectionHeaderCopy}>
         <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
       </View>
       {loading ? (
         <View style={styles.loadingPill}>
@@ -162,28 +156,23 @@ function StandoutDupeSkeletonCard() {
 
 function RailEmptyCard({
   title,
-  subtitle,
 }: {
   title: string;
-  subtitle: string;
 }) {
   return (
     <View style={styles.emptyRailCard}>
       <Text style={styles.emptyRailTitle}>{title}</Text>
-      <Text style={styles.emptyRailSubtitle}>{subtitle}</Text>
     </View>
   );
 }
 
 function MoodLaneCard({
   title,
-  subtitle,
   items,
   loading,
   onPress,
 }: {
   title: string;
-  subtitle: string;
   items: Product[];
   loading: boolean;
   onPress: () => void;
@@ -196,7 +185,6 @@ function MoodLaneCard({
           <Text style={styles.moodCountText}>{items.length || '--'}</Text>
         </View>
       </View>
-      <Text style={styles.moodRailSubtitle}>{subtitle}</Text>
 
       {items.length > 0 ? (
         <View style={styles.moodTagRow}>
@@ -280,9 +268,6 @@ export default function CategoriesScreen() {
       <View style={styles.topBar}>
         <Text style={styles.eyebrow}>Beauty Catalog</Text>
         <Text style={styles.title}>Categories</Text>
-        <Text style={styles.subtitle}>
-          Scan categories, standout dupes, and curated discovery lanes without wading through a long stack.
-        </Text>
       </View>
 
       <View style={styles.content}>
@@ -290,7 +275,6 @@ export default function CategoriesScreen() {
           <Animated.View entering={FadeInDown.duration(350)} style={styles.sectionBlock}>
             <SectionHeader
               title="Category Lanes"
-              subtitle="Compact entry points with live totals as they load."
               loading={categoriesLoading && !data?.length}
             />
 
@@ -309,7 +293,6 @@ export default function CategoriesScreen() {
           <Animated.View entering={FadeInDown.delay(80).duration(350)} style={styles.sectionBlock}>
             <SectionHeader
               title="Standout Dupe Picks"
-              subtitle="Quick access to the strongest comparison cards."
               loading={featuredDupesLoading && standoutDupes.length === 0}
             />
 
@@ -342,7 +325,6 @@ export default function CategoriesScreen() {
               ) : (
                 <RailEmptyCard
                   title="Standout comparisons are still warming up."
-                  subtitle="This rail stays in place so the page layout does not jump around."
                 />
               )}
             </ScrollView>
@@ -351,7 +333,6 @@ export default function CategoriesScreen() {
           <Animated.View entering={FadeInDown.delay(160).duration(350)} style={styles.sectionBlock}>
             <SectionHeader
               title="Browse By Mood"
-              subtitle="Each discovery lane stays visible, even while preview products are loading."
               loading={moodRailLoading}
             />
 
@@ -364,7 +345,6 @@ export default function CategoriesScreen() {
                 <MoodLaneCard
                   key={lane.id}
                   title={lane.title}
-                  subtitle={lane.subtitle}
                   items={lane.items}
                   loading={lane.loading}
                   onPress={() => openCategory(lane.category, lane.title)}
@@ -401,12 +381,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     textTransform: 'uppercase',
   },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    maxWidth: 520,
-  },
   content: {
     flex: 1,
     backgroundColor: colors.background,
@@ -433,16 +407,11 @@ const styles = StyleSheet.create({
   },
   sectionHeaderCopy: {
     flex: 1,
-    gap: spacing.xs,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.primary,
     textTransform: 'uppercase',
-  },
-  sectionSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
   },
   loadingPill: {
     flexDirection: 'row',
@@ -603,7 +572,7 @@ const styles = StyleSheet.create({
   },
   emptyRailCard: {
     width: 270,
-    minHeight: 178,
+    minHeight: 140,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
@@ -617,13 +586,9 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.primary,
   },
-  emptyRailSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
   moodRailCard: {
     width: 252,
-    minHeight: 198,
+    minHeight: 168,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
@@ -656,16 +621,11 @@ const styles = StyleSheet.create({
     ...typography.smallBold,
     color: colors.primary,
   },
-  moodRailSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
   moodTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
   moodTag: {
     borderRadius: radius.full,
@@ -681,7 +641,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   moodEmptyBox: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
