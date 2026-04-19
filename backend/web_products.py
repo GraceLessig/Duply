@@ -296,6 +296,30 @@ def _clean_product_title(title, retailer=""):
     return cleaned.strip(" -|")
 
 
+def _strip_brand_from_title(title, brand):
+    cleaned_title = html.unescape(str(title or "").strip())
+    clean_brand = html.unescape(str(brand or "").strip())
+    if not cleaned_title or not clean_brand:
+        return cleaned_title
+
+    patterns = [
+        rf"\s+-\s+{re.escape(clean_brand)}$",
+        rf"\s+\|\s+{re.escape(clean_brand)}$",
+        rf"\s+:\s+{re.escape(clean_brand)}$",
+        rf"^{re.escape(clean_brand)}\s+-\s+",
+        rf"^{re.escape(clean_brand)}\s+\|\s+",
+        rf"^{re.escape(clean_brand)}\s+:\s+",
+        rf"^{re.escape(clean_brand)}\s+by\s+",
+        rf"\s+by\s+{re.escape(clean_brand)}$",
+    ]
+
+    stripped = cleaned_title
+    for pattern in patterns:
+        stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE).strip()
+
+    return stripped or cleaned_title
+
+
 def _normalize_retailer_name(value):
     normalized = normalize_text(value)
     if normalized in OFFICIAL_US_RETAILERS:
@@ -645,6 +669,22 @@ def _extract_meta_content(page_html, property_name):
     return ""
 
 
+def _extract_embedded_page_price(page_html):
+    patterns = [
+        r'data-cnstrc-item-price=["\']\$?([0-9]+(?:\.[0-9]{1,2})?)["\']',
+        r'"currentSku"\s*:\s*\{.*?"listPrice"\s*:\s*"\$?([0-9]+(?:\.[0-9]{1,2})?)"',
+        r'"listPrice"\s*:\s*"\$?([0-9]+(?:\.[0-9]{1,2})?)"',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, page_html, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        price = _extract_price(match.group(1))
+        if price > 0:
+            return price
+    return 0
+
+
 def _extract_json_ld_objects(page_html):
     objects = []
     for match in re.finditer(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', page_html, flags=re.IGNORECASE | re.DOTALL):
@@ -709,15 +749,30 @@ def _extract_brand_from_page(page_html, product_data, title="", retailer=""):
             return brand
 
     cleaned_title = _clean_product_title(title, retailer)
+    supported_brand = _find_supported_brand(cleaned_title)
+    if supported_brand:
+        return supported_brand
+
     title_separators = [" by ", " - ", " | ", ":"]
     normalized_title = html.unescape(str(cleaned_title or "").strip())
     for separator in title_separators:
         if separator in normalized_title.lower():
             parts = re.split(re.escape(separator), normalized_title, maxsplit=1, flags=re.IGNORECASE)
-            if parts:
-                brand = _normalize_brand_value(parts[0])
-                if brand and len(brand.split()) <= 5:
-                    return brand
+            if len(parts) == 2:
+                candidates = [
+                    _normalize_brand_value(parts[0]),
+                    _normalize_brand_value(parts[1]),
+                ]
+                for candidate in candidates:
+                    supported_candidate = _find_supported_brand(candidate)
+                    if supported_candidate:
+                        return supported_candidate
+                for candidate in sorted(
+                    [candidate for candidate in candidates if candidate],
+                    key=lambda value: (len(value.split()) > 5, len(value.split()), len(value)),
+                ):
+                    if len(candidate.split()) <= 5:
+                        return candidate
     return ""
 
 
@@ -793,6 +848,7 @@ def _parse_official_retailer_product_page(url, retailer):
     if not _is_merchandise_product_title(title, final_url):
         return None
     brand = _extract_brand_from_page(page_html, product_data, title=title, retailer=retailer_key)
+    title = _strip_brand_from_title(title, brand)
     image = (
         product_data.get("image")
         or _extract_meta_content(page_html, "og:image")
@@ -817,6 +873,8 @@ def _parse_official_retailer_product_page(url, retailer):
     category = _extract_breadcrumb_category(page_html)
     product_type = normalize_product_type(category or _infer_product_type(title))
     clean_price = _extract_price(price)
+    if clean_price <= 0:
+        clean_price = _extract_embedded_page_price(page_html)
     official_offer = _normalize_official_offer(
         offers.get("url") or final_url,
         config.get("displayName") or retailer,
@@ -857,14 +915,15 @@ def _parse_official_retailer_product_page(url, retailer):
     }
 
 
-def _collect_sitemap_product_urls(sitemap_urls, product_url_pattern, max_urls=0):
+def _collect_sitemap_product_urls(sitemap_urls, product_url_pattern, max_urls=0, force_refresh=False):
     cache_key = {
         "sitemaps": list(sitemap_urls or []),
         "pattern": product_url_pattern,
     }
-    cached = get_firestore_web_cache("official-retailer-sitemap-urls", json.dumps(cache_key, sort_keys=True), WEB_IMAGE_CACHE_TTL_SECONDS)
-    if isinstance(cached, list) and cached:
-        return cached[:max_urls] if max_urls else cached
+    if not force_refresh:
+        cached = get_firestore_web_cache("official-retailer-sitemap-urls", json.dumps(cache_key, sort_keys=True), WEB_IMAGE_CACHE_TTL_SECONDS)
+        if isinstance(cached, list) and cached:
+            return cached[:max_urls] if max_urls else cached
 
     queue = list(sitemap_urls or [])
     visited = set()
@@ -1258,6 +1317,7 @@ def augment_official_us_retailers(retailers=None, max_urls_per_retailer=0, start
             config.get("sitemaps"),
             config.get("productUrlPattern"),
             0,
+            force_refresh=start_index == 0,
         )
         scoped_urls = sitemap_urls[start_index:]
         if max_urls_per_retailer:

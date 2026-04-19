@@ -449,6 +449,7 @@ export async function findPriceMatchesFromBackend(product: Product): Promise<Pri
       id: product.id,
       brand: product.brand,
       name: product.name,
+      familyName: product.familyName,
       price: product.price,
       image: product.image,
       category: product.category,

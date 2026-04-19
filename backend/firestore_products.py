@@ -1220,12 +1220,11 @@ def _load_catalog_products(force_refresh=False):
         enriched_siblings = []
 
         for sibling in siblings:
-            has_variants = len(variant_options) > 1
             enriched = {
                 **sibling,
-                "familyName": family_name if has_variants else _record_name(sibling),
+                "familyName": family_name,
                 "variantGroupId": variant_group_id,
-                "selectedVariantLabel": extract_product_variant_label(sibling, family_name) if has_variants else "",
+                "selectedVariantLabel": extract_product_variant_label(sibling, family_name),
                 "variantOptions": list(variant_options),
             }
             enriched_siblings.append(enriched)
@@ -1235,9 +1234,13 @@ def _load_catalog_products(force_refresh=False):
 
         representative = _preferred_family_product(enriched_siblings, family_name)
         family_search_aliases = tuple(sorted({
-            sibling.get("_searchName") or normalize_text(_record_name(sibling))
+            alias
             for sibling in enriched_siblings
-            if (sibling.get("_searchName") or normalize_text(_record_name(sibling)))
+            for alias in {
+                sibling.get("_searchName") or normalize_text(_record_name(sibling)),
+                canonicalize_catalog_text(_record_name(sibling)),
+            }
+            if alias
         }))
         representative = {
             **representative,

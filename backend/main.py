@@ -85,6 +85,10 @@ def _cache_set(key, value):
     return value
 
 
+def _clear_response_cache():
+    _response_cache.clear()
+
+
 def _cache_get_search_candidates(query, local_limit, web_limit, max_results):
     normalized_query = _normalize_text(query)
     cache_key = ("search-candidates", normalized_query)
@@ -248,14 +252,13 @@ def _with_variant_options(product, siblings):
         })
 
     variant_options.sort(key=lambda item: ((item.get("label") or "").lower(), item.get("id") or ""))
-    has_variants = len(variant_options) > 1
 
     return {
         **product,
-        "familyName": family_name if has_variants else (product.get("name") or family_name),
+        "familyName": family_name,
         "variantGroupId": _product_family_key(product),
-        "variantOptions": variant_options if has_variants else [],
-        "selectedVariantLabel": _extract_variant_label(product, family_name) if has_variants else "",
+        "variantOptions": variant_options if len(variant_options) > 1 else [],
+        "selectedVariantLabel": _extract_variant_label(product, family_name),
     }
 
 
@@ -545,7 +548,13 @@ def _product_from_record(record, fallback=None, enrich_image=False):
             if offer_image:
                 break
     image = record.get("image") or raw.get("image") or raw.get("imageUrl") or offer_image or fallback.get("image", "")
-    product_url = record.get("title-href") or raw.get("productUrl") or raw.get("title-href") or ""
+    product_url = (
+        record.get("productUrl")
+        or record.get("title-href")
+        or raw.get("productUrl")
+        or raw.get("title-href")
+        or ""
+    )
     if enrich_image and not image:
         image = find_product_image(brand, name, product_url)
         if image and explicit_id:
@@ -1800,6 +1809,7 @@ def _step_augment_us_retailers_job(state):
         max_urls_per_retailer=config.get("batchSizePerRetailer") or 25,
         start_index=start_index,
     )
+    _clear_response_cache()
 
     progress = state["progress"]
     progress["stepsRun"] += 1
@@ -1976,11 +1986,13 @@ async def augment_top_brands(request: Request):
     start_index = max(0, int(body.get("startIndex") or 0))
 
     try:
-        return augment_official_us_retailers(
+        result = augment_official_us_retailers(
             retailers=retailers,
             max_urls_per_retailer=max_urls_per_retailer,
             start_index=start_index,
         )
+        _clear_response_cache()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1997,11 +2009,13 @@ async def augment_us_retailers(request: Request):
     start_index = max(0, int(body.get("startIndex") or 0))
 
     try:
-        return augment_official_us_retailers(
+        result = augment_official_us_retailers(
             retailers=retailers,
             max_urls_per_retailer=max_urls_per_retailer,
             start_index=start_index,
         )
+        _clear_response_cache()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2163,24 +2177,41 @@ async def get_price_matches(request: Request):
         product_id = body.get("id", "")
         brand = body.get("brand", "")
         name = body.get("name", "")
+        family_name = body.get("familyName", "")
+        lookup_name = family_name or name
 
-        if not name:
+        if not lookup_name:
             raise HTTPException(status_code=400, detail="Product name is required")
 
-        cache_key = ("price_matches", product_id, _normalize_text(brand), _normalize_text(name))
+        cache_key = (
+            "price_matches",
+            product_id,
+            _normalize_text(brand),
+            _normalize_text(lookup_name),
+            _normalize_text(body.get("productUrl", "")),
+        )
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
 
         product = get_firestore_product_by_id(product_id) if product_id else None
+        product_url = (
+            str(body.get("productUrl") or "").strip()
+            or str((product or {}).get("productUrl") or "").strip()
+            or str((((product or {}).get("raw") or {}).get("productUrl") or "")).strip()
+        )
         stored_offers = []
         if product_id:
-            merchant_offers = ((product or {}).get("raw") or {}).get("merchantOffers") or []
+            merchant_offers = (
+                (product or {}).get("merchantOffers")
+                or ((product or {}).get("raw") or {}).get("merchantOffers")
+                or []
+            )
             for index, offer in enumerate(merchant_offers):
                 stored_offers.append({
                     "id": offer.get("id") or f"stored-offer-{index}",
-                    "retailer": offer.get("retailer") or "",
-                    "title": offer.get("title") or f"{brand} {name}".strip(),
+                    "retailer": offer.get("retailer") or (offer.get("url", "").split("/")[2] if "://" in str(offer.get("url") or "") else ""),
+                    "title": offer.get("title") or f"{brand} {lookup_name}".strip(),
                     "price": offer.get("price"),
                     "url": offer.get("url") or "",
                     "image": offer.get("image") or "",
@@ -2188,22 +2219,22 @@ async def get_price_matches(request: Request):
                     "source": offer.get("source") or "catalog",
                     "matchConfidence": offer.get("matchConfidence") or 100,
                 })
-        catalog_offers = _catalog_price_matches(brand, name, limit=12)
-        live_offers = find_price_matches(brand, name, product_url=body.get("productUrl", ""), limit=12)
+        catalog_offers = _catalog_price_matches(brand, lookup_name, limit=12)
+        live_offers = find_price_matches(brand, lookup_name, product_url=product_url, limit=12)
         merged = _merge_price_offers(
             catalog_offers,
             stored_offers,
             live_offers,
             brand=brand,
-            name=name,
+            name=lookup_name,
             limit=3,
         )
         if not merged:
             fallback_offer = _catalog_url_fallback_offer(
                 product,
                 brand=brand,
-                name=name,
-                fallback_url=body.get("productUrl", ""),
+                name=lookup_name,
+                fallback_url=product_url,
             )
             if fallback_offer:
                 merged = [fallback_offer]
