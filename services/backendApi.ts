@@ -1,7 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { Category, CategoryProductsPage, Dupe, PriceOffer, Product } from './api';
-import { findFamilyVariants, groupProductsByFamily, withVariantOptions } from './productFamilies';
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -104,13 +103,6 @@ function buildSearchPageCacheKey(
 function seedProductFamilyCaches(product: Product) {
   if (!product?.id) return;
   setCachedValue(`product:${product.id}`, product, CACHE_TTL_MS.product);
-  if (product.variantOptions?.length) {
-    product.variantOptions.forEach(variant => {
-      if (variant.id) {
-        setCachedValue(`product:${variant.id}`, product, CACHE_TTL_MS.product);
-      }
-    });
-  }
 }
 
 function seedProductsCache(products: Product[]) {
@@ -360,9 +352,8 @@ export async function searchProductsFromBackend(query: string, options: { limit?
   });
   const url = `${BASE_URL}/products/search?${params.toString()}`;
   const products = await fetchJsonWithCache<Product[]>(url, undefined, `search:${trimmed}:${options.limit || 8}`, CACHE_TTL_MS.search);
-  const grouped = groupProductsByFamily(products);
-  seedProductsCache(grouped);
-  return grouped;
+  seedProductsCache(products);
+  return products;
 }
 
 export async function searchProductsPageFromBackend(
@@ -416,23 +407,8 @@ export async function getProductByIdFromBackend(id: string): Promise<Product | n
     }
 
     const parsed = JSON.parse(text) as Product;
-    let normalized = parsed;
-
-    const variantQuery = [parsed.brand, parsed.name].filter(Boolean).join(' ').trim();
-    if (variantQuery) {
-      try {
-        const related = await fetchSearchProductsPageRaw(variantQuery, { page: 1, pageSize: 40, sort: 'popular' });
-        const siblings = findFamilyVariants(parsed, related.items);
-        if (siblings.length > 1) {
-          normalized = withVariantOptions(parsed, siblings);
-        }
-      } catch {
-        // Best-effort variant lookup only.
-      }
-    }
-
-    seedProductFamilyCaches(normalized);
-    return normalized;
+    seedProductFamilyCaches(parsed);
+    return parsed;
   })();
 
   inflightRequests.set(cacheKey, request);

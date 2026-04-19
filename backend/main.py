@@ -248,13 +248,14 @@ def _with_variant_options(product, siblings):
         })
 
     variant_options.sort(key=lambda item: ((item.get("label") or "").lower(), item.get("id") or ""))
+    has_variants = len(variant_options) > 1
 
     return {
         **product,
-        "familyName": family_name,
+        "familyName": family_name if has_variants else (product.get("name") or family_name),
         "variantGroupId": _product_family_key(product),
-        "variantOptions": variant_options if len(variant_options) > 1 else [],
-        "selectedVariantLabel": _extract_variant_label(product, family_name),
+        "variantOptions": variant_options if has_variants else [],
+        "selectedVariantLabel": _extract_variant_label(product, family_name) if has_variants else "",
     }
 
 
@@ -585,6 +586,10 @@ def _product_from_record(record, fallback=None, enrich_image=False):
         "source": record.get("source") or raw.get("source") or "catalog",
         "productUrl": product_url,
         "releaseYear": record.get("releaseYear") or raw.get("releaseYear") or None,
+        "familyName": record.get("familyName") or fallback.get("familyName") or "",
+        "variantGroupId": record.get("variantGroupId") or fallback.get("variantGroupId") or "",
+        "selectedVariantLabel": record.get("selectedVariantLabel") or fallback.get("selectedVariantLabel") or "",
+        "variantOptions": record.get("variantOptions") or fallback.get("variantOptions") or [],
     }
 
 
@@ -635,6 +640,22 @@ def _finalize_product(product, require_image=True):
         return None
 
     return normalized
+
+
+def _with_family_metadata(product, source):
+    if not product:
+        return None
+    if not source:
+        return product
+
+    variant_options = source.get("variantOptions") or product.get("variantOptions") or []
+    return {
+        **product,
+        "familyName": source.get("familyName") or product.get("familyName") or "",
+        "variantGroupId": source.get("variantGroupId") or product.get("variantGroupId") or "",
+        "selectedVariantLabel": source.get("selectedVariantLabel") or product.get("selectedVariantLabel") or "",
+        "variantOptions": variant_options if len(variant_options) > 1 else [],
+    }
 
 
 def _dedupe_products(products, require_image=True):
@@ -790,7 +811,7 @@ def _coerce_to_display_product(record, fallback=None, enrich_image=False):
 
     resolved_product = _resolve_live_product(normalized_product)
     if resolved_product:
-        return _finalize_product(resolved_product, require_image=False)
+        return _with_family_metadata(_finalize_product(resolved_product, require_image=False), normalized_product)
 
     return normalized_product
 
@@ -808,7 +829,7 @@ def _coerce_to_search_product(record, fallback=None, enrich_image=False):
     if not resolved_product:
         return None
 
-    return _finalize_product(resolved_product, require_image=False)
+    return _with_family_metadata(_finalize_product(resolved_product, require_image=False), normalized_product)
 
 
 def _directly_available_product(record, fallback=None, enrich_image=False, require_image=True):
@@ -2071,11 +2092,10 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
     if cached is not None:
         return cached
 
-    target_count = min(max(normalized_page * normalized_page_size * 2, 40), 240)
     result = list_products_by_category(
         category_or_type,
-        limit=target_count,
-        page=1,
+        limit=normalized_page_size,
+        page=normalized_page,
         query=q,
         sort_by=sort,
     )
@@ -2090,20 +2110,13 @@ def get_products_by_category(category_or_type: str, page: int = 1, page_size: in
             continue
         available_items.append(normalized_product)
 
-    grouped_items = _group_products_by_family(_dedupe_products(available_items, require_image=False))
-    total = len(grouped_items)
-    total_pages = max(1, (total + normalized_page_size - 1) // normalized_page_size)
-    safe_page = min(normalized_page, total_pages)
-    start = (safe_page - 1) * normalized_page_size
-    end = start + normalized_page_size
-
     return _cache_set(cache_key, {
         **result,
-        "items": grouped_items[start:end],
-        "total": total,
-        "page": safe_page,
+        "items": _dedupe_products(available_items, require_image=False),
+        "page": result.get("page", normalized_page),
         "pageSize": normalized_page_size,
-        "totalPages": total_pages,
+        "total": result.get("total", len(available_items)),
+        "totalPages": result.get("totalPages", 1),
     })
 
 

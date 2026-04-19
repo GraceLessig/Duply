@@ -30,6 +30,7 @@ import {
   getCachedProductById,
   prefetchPriceMatchesForProduct,
   prefetchProductById,
+  prefetchProductsById,
   seedProductCache,
 } from '../services/api';
 
@@ -134,7 +135,7 @@ export default function ProductDetailsScreen() {
   const isComparisonView = Boolean((fromFeatured && id) || (originalId && dupeProductId));
   const cachedOriginal = getCachedProductById(originalId || id || '');
   const cachedDupe = getCachedProductById(dupeProductId || '');
-  const cachedPriceOffers = getCachedPriceMatchesForProduct(cachedOriginal);
+  const initialCachedPriceOffers = getCachedPriceMatchesForProduct(cachedOriginal);
 
   const [original, setOriginal] = useState<Product | null>(cachedOriginal);
   const [dupeProduct, setDupeProduct] = useState<Product | null>(cachedDupe);
@@ -143,11 +144,12 @@ export default function ProductDetailsScreen() {
   const [matchReason, setMatchReason] = useState('');
   const [loading, setLoading] = useState(!(cachedOriginal || cachedDupe));
   const [previewImage, setPreviewImage] = useState('');
-  const [priceOffers, setPriceOffers] = useState<PriceOffer[]>(cachedPriceOffers || []);
+  const [priceOffers, setPriceOffers] = useState<PriceOffer[]>(initialCachedPriceOffers || []);
   const [priceOffersLoading, setPriceOffersLoading] = useState(false);
   const [priceOffersError, setPriceOffersError] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const cachedPriceOffers = getCachedPriceMatchesForProduct(original);
 
   const loadData = useCallback(async () => {
     const hasCachedContent = Boolean(cachedOriginal || cachedDupe);
@@ -266,8 +268,18 @@ export default function ProductDetailsScreen() {
   }, [original]);
 
   useEffect(() => {
+    const variantIds = (original?.variantOptions || [])
+      .map(variant => variant.id)
+      .filter(variantId => Boolean(variantId) && variantId !== original?.id);
+
+    if (variantIds.length) {
+      prefetchProductsById(variantIds);
+    }
+  }, [original]);
+
+  useEffect(() => {
     if (cachedPriceOffers?.length) {
-      setPriceOffers(prev => prev.length > 0 ? prev : cachedPriceOffers);
+      setPriceOffers(cachedPriceOffers);
     }
   }, [cachedPriceOffers]);
 
@@ -293,7 +305,7 @@ export default function ProductDetailsScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={{ fontSize: 48, marginBottom: spacing.lg }}>😕</Text>
+          <Text style={{ fontSize: 48, marginBottom: spacing.lg }}>:(</Text>
           <Text style={styles.notFound}>Product not found</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.goBackBtn}>
             <Text style={styles.goBackText}>Go Back</Text>
@@ -307,8 +319,9 @@ export default function ProductDetailsScreen() {
   const isFav = checkFavorite(favoriteId);
   const displayName = original.familyName || original.name;
   const selectedVariant = original.variantOptions?.find(variant => variant.id === selectedVariantId) || null;
-  const displayImage = selectedVariant?.image || original.image;
-  const displayVariantLabel = selectedVariant?.label || original.selectedVariantLabel || '';
+  const displayImage = original.image || selectedVariant?.image || '';
+  const displayVariantLabel = original.selectedVariantLabel || selectedVariant?.label || '';
+  const displayPrice = original.price > 0 ? original.price : (selectedVariant?.price || 0);
 
   const handleToggleFavorite = () => {
     if (!original || isComparisonView) return;
@@ -318,10 +331,46 @@ export default function ProductDetailsScreen() {
       variantGroupId: original.variantGroupId,
       originalName: displayName,
       originalBrand: original.brand,
-      originalPrice: original.price,
+      originalPrice: displayPrice,
       originalImage: displayImage,
       savings: 0,
     });
+  };
+
+  const handleVariantSelect = async (variantId: string) => {
+    if (!variantId || !original || isComparisonView) {
+      return;
+    }
+    if (variantId === original.id) {
+      setSelectedVariantId(variantId);
+      return;
+    }
+
+    setSelectedVariantId(variantId);
+    const cachedVariant = getCachedProductById(variantId);
+    if (cachedVariant) {
+      setOriginal(cachedVariant);
+      addRecentView(cachedVariant);
+      prefetchPriceMatchesForProduct(cachedVariant);
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const variantProduct = await dataService.getProductById(variantId);
+      if (variantProduct) {
+        seedProductCache(variantProduct);
+        setOriginal(variantProduct);
+        addRecentView(variantProduct);
+        prefetchPriceMatchesForProduct(variantProduct);
+        return;
+      }
+      setSelectedVariantId(original.id);
+    } catch {
+      setSelectedVariantId(original.id);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const openProductPage = (product: Product | null) => {
@@ -452,7 +501,7 @@ export default function ProductDetailsScreen() {
                 <Text style={styles.variantSummaryText}>Color: {displayVariantLabel}</Text>
               </View>
             ) : null}
-            <Text style={styles.heroPrice}>${original.price.toFixed(2)}</Text>
+            <Text style={styles.heroPrice}>${displayPrice.toFixed(2)}</Text>
           </Animated.View>
         )}
 
@@ -470,7 +519,7 @@ export default function ProductDetailsScreen() {
                   <TouchableOpacity
                     key={variant.id}
                     activeOpacity={0.86}
-                    onPress={() => setSelectedVariantId(variant.id)}
+                    onPress={() => { void handleVariantSelect(variant.id); }}
                     style={[styles.variantChip, active && styles.variantChipActive]}
                   >
                     <Text style={[styles.variantChipText, active && styles.variantChipTextActive]}>

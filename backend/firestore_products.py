@@ -210,10 +210,216 @@ CATEGORY_BUCKETS = {
     },
 }
 
+VARIANT_STOP_WORDS = {
+    "shade",
+    "shades",
+    "color",
+    "colors",
+    "colour",
+    "colours",
+    "hue",
+    "tone",
+    "tones",
+    "finish",
+    "variant",
+}
+
 
 def normalize_product_type(value):
     normalized = normalize_text(value)
     return PRODUCT_TYPE_ALIASES.get(normalized, normalized)
+
+
+def _record_id(product):
+    return str(product.get("id") or product.get("firestore_id") or "").strip()
+
+
+def _record_brand(product):
+    return str(product.get("brand") or product.get("Brand") or "").strip()
+
+
+def _record_name(product):
+    return str(product.get("product_name") or product.get("name") or product.get("Product_Name") or "").strip()
+
+
+def _record_category(product):
+    return str(product.get("category") or product.get("Category") or product.get("main_category") or "").strip()
+
+
+def _record_product_type(product):
+    return normalize_product_type(
+        product.get("productType")
+        or product.get("subcategory")
+        or product.get("type")
+        or _record_category(product)
+    )
+
+
+def _record_image(product):
+    raw = product.get("raw", {}) if isinstance(product.get("raw"), dict) else {}
+    merchant_offers = product.get("merchantOffers") or raw.get("merchantOffers") or []
+    offer_image = ""
+    for offer in merchant_offers:
+        if isinstance(offer, dict) and offer.get("image"):
+            offer_image = str(offer.get("image") or "").strip()
+            if offer_image:
+                break
+
+    return str(
+        product.get("image")
+        or product.get("imageUrl")
+        or product.get("image_link")
+        or raw.get("image")
+        or raw.get("imageUrl")
+        or offer_image
+        or ""
+    ).strip()
+
+
+def _record_price(product):
+    return normalize_catalog_price(
+        product.get("price")
+        or product.get("Price_USD")
+        or product.get("salePrice")
+        or product.get("current_price")
+        or 0
+    )
+
+
+def _normalize_family_token(value):
+    return re.sub(r"[^a-z0-9]+", " ", normalize_text(value)).strip()
+
+
+def _to_title_case(value):
+    return " ".join(
+        part[:1].upper() + part[1:]
+        for part in re.split(r"\s+", str(value or "").strip())
+        if part
+    )
+
+
+def _looks_like_variant_suffix(value):
+    normalized = _normalize_family_token(value)
+    if not normalized:
+        return False
+
+    if re.match(r"^[a-z]?\d{2,6}(?:\s+[a-z0-9].*)?$", str(value or "").strip(), re.IGNORECASE):
+        return True
+
+    token_count = len(normalized.split())
+    return token_count <= 4 and len(normalized) <= 28
+
+
+def _normalize_variant_label(value):
+    return re.sub(r"^[|:,\-()\s]+|[|:,\-()\s]+$", "", str(value or "").strip())
+
+
+def _split_title_stem(name):
+    trimmed = str(name or "").strip()
+    separated = re.match(r"^(.*?)(?:\s+(?:\||:|-)\s+)([^|:]{1,40})$", trimmed)
+    if separated and separated.group(1) and separated.group(2):
+        stem = separated.group(1).strip()
+        suffix = _normalize_variant_label(separated.group(2))
+        if stem and _looks_like_variant_suffix(suffix) and len(stem) >= max(6, int(len(trimmed) * 0.45)):
+            return stem, suffix
+
+    patterns = [
+        r"^(.*)\s+[|:-]\s*([a-z]?\d{2,6}\b[^|:-]{0,40})\s*$",
+        r"^(.*)\s+[(-]([^()]*?(?:shade|color|colour|tone|hue|finish|variant)[^()]*)[)\-]\s*$",
+        r"^(.*)\s+\b(?:in\s+)?(?:shade|color|colour|tone|hue|finish)\b\s+(.+)$",
+        r"^(.*)\s+\b(?:mini|travel size|full size)\b\s*$",
+    ]
+
+    for pattern in patterns:
+        matched = re.match(pattern, trimmed, re.IGNORECASE)
+        stem = (matched.group(1).strip() if matched and matched.group(1) else "")
+        suffix = _normalize_variant_label(matched.group(2) if matched and matched.lastindex and matched.lastindex >= 2 else "")
+        if stem and len(stem) >= max(6, int(len(trimmed) * 0.45)):
+            if not suffix or _looks_like_variant_suffix(suffix):
+                return stem, suffix
+
+    return trimmed, ""
+
+
+def build_product_family_name(product):
+    stem, _ = _split_title_stem(_record_name(product))
+    return stem or _record_name(product)
+
+
+def build_product_family_key(product):
+    brand = _normalize_family_token(_record_brand(product))
+    category = _normalize_family_token(_record_category(product))
+    product_type = _normalize_family_token(_record_product_type(product))
+    family_name = _normalize_family_token(build_product_family_name(product))
+    return "|".join([brand, category, product_type, family_name])
+
+
+def extract_product_variant_label(product, family_name=None):
+    resolved_family_name = family_name or build_product_family_name(product)
+    name = _record_name(product)
+    if name and resolved_family_name and normalize_text(name) != normalize_text(resolved_family_name):
+        stem, variant_label = _split_title_stem(name)
+        normalized_variant = _normalize_family_token(variant_label)
+        if (
+            normalize_text(stem) == normalize_text(str(resolved_family_name).strip())
+            and variant_label
+            and len(variant_label) <= 40
+            and normalized_variant
+            and normalized_variant not in VARIANT_STOP_WORDS
+        ):
+            return _to_title_case(variant_label)
+    return ""
+
+
+def _build_family_variant_options(siblings, family_name):
+    variant_options = []
+    seen_ids = set()
+
+    for sibling in siblings:
+        option_id = _record_id(sibling)
+        if not option_id or option_id in seen_ids:
+            continue
+        seen_ids.add(option_id)
+
+        label = extract_product_variant_label(sibling, family_name)
+        image = _record_image(sibling)
+        if not label and not image:
+            continue
+
+        variant_options.append({
+            "id": option_id,
+            "label": label,
+            "image": image,
+            "price": _record_price(sibling),
+        })
+
+    variant_options.sort(key=lambda item: ((item.get("label") or "").lower(), item.get("id") or ""))
+    return variant_options if len(variant_options) > 1 else []
+
+
+def _preferred_family_product(siblings, family_name):
+    preferred = next(
+        (product for product in siblings if not extract_product_variant_label(product, family_name)),
+        None,
+    )
+    if preferred:
+        return preferred
+
+    return sorted(
+        siblings,
+        key=lambda product: (
+            not bool(_record_image(product)),
+            normalize_text(_record_name(product)),
+            _record_id(product),
+        ),
+    )[0]
+
+
+def _family_searchable_tokens(siblings):
+    tokens = set()
+    for sibling in siblings:
+        tokens.update(_searchable_tokens(sibling))
+    return tokens
 
 
 def _slugify(value):
@@ -512,7 +718,8 @@ def _product_search_score(product, normalized_query, query_tokens):
     brand = product.get("_searchBrand") or normalize_text(product.get("brand"))
     name = product.get("_searchName") or normalize_text(product.get("product_name"))
     category = product.get("_searchCategory") or normalize_text(product.get("category"))
-    haystack = f"{brand} {name} {category}".strip()
+    aliases = " ".join(product.get("_searchAliases") or [])
+    haystack = f"{brand} {name} {category} {aliases}".strip()
 
     if not haystack:
         return -1
@@ -534,6 +741,8 @@ def _product_search_score(product, normalized_query, query_tokens):
         score += 18
     elif normalized_query in name:
         score += 12
+    elif aliases and normalized_query in aliases:
+        score += 12
 
     if category.startswith(normalized_query):
         score += 8
@@ -546,6 +755,9 @@ def _product_search_score(product, normalized_query, query_tokens):
             score += 8
             token_matches += 1
         elif token in name:
+            score += 7
+            token_matches += 1
+        elif aliases and token in aliases:
             score += 7
             token_matches += 1
         elif token in category:
@@ -743,7 +955,8 @@ def _metadata_match_score(product, target):
 
 
 def _fetch_metadata_product(target):
-    products = _load_catalog_products()
+    _load_catalog_products()
+    products = list((_catalog_products_by_id or {}).values())
     if not products:
         return None
 
@@ -986,7 +1199,6 @@ def _load_catalog_products(force_refresh=False):
                 continue
             seen_identity.add(identity)
             merged.append(normalized)
-            by_id[normalized["firestore_id"]] = normalized
 
     if not merged:
         for product in _load_metadata_products():
@@ -995,25 +1207,62 @@ def _load_catalog_products(force_refresh=False):
                 continue
             seen_identity.add(identity)
             merged.append(product)
-            by_id[product["firestore_id"]] = product
 
+    family_groups = {}
     for product in merged:
-        bucket = product.get("_bucket") or _product_bucket(product)
-        product_type = product.get("_searchType") or normalize_product_type(product.get("subcategory") or product.get("type"))
-        category = normalize_product_type(product.get("category"))
+        family_groups.setdefault(build_product_family_key(product), []).append(product)
+
+    family_products = []
+    for siblings in family_groups.values():
+        family_name = build_product_family_name(siblings[0])
+        variant_group_id = build_product_family_key(siblings[0])
+        variant_options = _build_family_variant_options(siblings, family_name)
+        enriched_siblings = []
+
+        for sibling in siblings:
+            has_variants = len(variant_options) > 1
+            enriched = {
+                **sibling,
+                "familyName": family_name if has_variants else _record_name(sibling),
+                "variantGroupId": variant_group_id,
+                "selectedVariantLabel": extract_product_variant_label(sibling, family_name) if has_variants else "",
+                "variantOptions": list(variant_options),
+            }
+            enriched_siblings.append(enriched)
+            sibling_id = enriched.get("firestore_id")
+            if sibling_id:
+                by_id[sibling_id] = enriched
+
+        representative = _preferred_family_product(enriched_siblings, family_name)
+        family_search_aliases = tuple(sorted({
+            sibling.get("_searchName") or normalize_text(_record_name(sibling))
+            for sibling in enriched_siblings
+            if (sibling.get("_searchName") or normalize_text(_record_name(sibling)))
+        }))
+        representative = {
+            **representative,
+            "_searchAliases": family_search_aliases,
+        }
+        representative_id = representative.get("firestore_id")
+        if representative_id:
+            by_id[representative_id] = representative
+        family_products.append(representative)
+
+        bucket = representative.get("_bucket") or _product_bucket(representative)
+        product_type = representative.get("_searchType") or normalize_product_type(representative.get("subcategory") or representative.get("type"))
+        category = normalize_product_type(representative.get("category"))
 
         for key in {bucket, product_type, category}:
             if not key:
                 continue
-            by_category.setdefault(key, []).append(product)
+            by_category.setdefault(key, []).append(representative)
 
-        product_id = product.get("firestore_id")
-        if product_id:
-            for token in _searchable_tokens(product):
+        if representative_id:
+            for token in _family_searchable_tokens(enriched_siblings):
                 for prefix in _token_prefixes(token):
-                    search_prefix_index.setdefault(prefix, set()).add(product_id)
+                    search_prefix_index.setdefault(prefix, set()).add(representative_id)
 
-    _catalog_products = merged
+    _catalog_products = family_products
     _catalog_products_by_id = by_id
     _catalog_products_by_category = by_category
     _catalog_search_prefix_index = search_prefix_index
