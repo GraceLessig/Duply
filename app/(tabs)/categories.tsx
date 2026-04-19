@@ -79,26 +79,25 @@ function CategoryTile({
     >
       <View style={[styles.categoryTileInner, { backgroundColor: category.color }]}>
         <View style={[styles.categoryOrb, dark && styles.categoryOrbDark]} />
-        <View style={styles.categoryTopRow}>
-          {typeof category.count === 'number' ? (
-            <Text style={[styles.categoryCount, dark && styles.categoryCountDark]}>
-              {category.count.toLocaleString()}
-            </Text>
-          ) : (
-            <Skeleton
-              width={62}
-              height={14}
-              borderRadius={radius.full}
-              style={styles.categoryCountSkeleton}
-            />
-          )}
-        </View>
-
         <View style={styles.categoryBottomRow}>
           <Text style={[styles.categoryName, dark && styles.categoryNameDark]}>{category.name}</Text>
-          <Text style={[styles.categoryMeta, dark && styles.categoryMetaDark]}>
-            {typeof category.count === 'number' ? 'Products' : 'Loading totals'}
-          </Text>
+          <View style={styles.categoryFooterRow}>
+            <Text style={[styles.categoryMeta, dark && styles.categoryMetaDark]}>
+              {typeof category.count === 'number' ? 'Products' : 'Loading totals'}
+            </Text>
+            {typeof category.count === 'number' ? (
+              <Text style={[styles.categoryCount, dark && styles.categoryCountDark]}>
+                {category.count.toLocaleString()}
+              </Text>
+            ) : (
+              <Skeleton
+                width={62}
+                height={14}
+                borderRadius={radius.full}
+                style={styles.categoryCountSkeleton}
+              />
+            )}
+          </View>
         </View>
       </View>
     </Pressable>
@@ -447,7 +446,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.primary,
-    justifyContent: 'space-between',
     overflow: 'hidden',
   },
   categoryOrb: {
@@ -462,12 +460,6 @@ const styles = StyleSheet.create({
   categoryOrbDark: {
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  categoryTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-  },
   categoryCount: {
     ...typography.captionBold,
     color: colors.primary,
@@ -476,18 +468,27 @@ const styles = StyleSheet.create({
     color: colors.cream,
   },
   categoryCountSkeleton: {
-    alignSelf: 'flex-end',
+    alignSelf: 'center',
   },
   categoryBottomRow: {
-    gap: spacing.xs,
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   categoryName: {
     ...typography.h3,
     color: colors.text,
     textTransform: 'uppercase',
+    maxWidth: '84%',
   },
   categoryNameDark: {
     color: colors.surface,
+  },
+  categoryFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   categoryMeta: {
     ...typography.caption,
